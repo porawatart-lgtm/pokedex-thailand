@@ -12,18 +12,86 @@ import { getDualTypeDefenses } from "@/lib/type-chart";
 import { formatDexNumber, formatHeight, formatWeight, formatGenderRatio, formatCatchRate, getTypeColor, getEffectivenessLabel } from "@/lib/utils";
 import type { PokemonDetail, PokemonTypeName } from "@/types/pokemon";
 import { cn } from "@/lib/utils";
+import { fetchPokemon, fetchPokemonSpecies, fetchEvolutionChain, flattenEvolutionChain, getArtworkUrl, parseGenerationFromUrl } from "@/lib/pokeapi";
 
 async function getPokemonDetail(id: string): Promise<PokemonDetail | null> {
   try {
-    const base = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000");
-    const res = await fetch(`${base}/api/pokemon/${id}`, {
-      next: { revalidate: 3600 },
-    });
-    if (!res.ok) return null;
-    const data = await res.json() as { data: PokemonDetail };
-    return data.data;
+    const [pokemon, species] = await Promise.all([
+      fetchPokemon(id),
+      fetchPokemonSpecies(id),
+    ]);
+    const [evChainData] = await Promise.all([
+      fetchEvolutionChain(species.evolution_chain.url),
+    ]);
+    const evolutions = flattenEvolutionChain(evChainData.chain);
+    const thName = species.names.find((n) => n.language.name === "th")?.name ?? null;
+    const jaName = species.names.find((n) => n.language.name === "ja")?.name ?? null;
+    const jaRomaji = species.names.find((n) => n.language.name === "ja-Hrkt")?.name ?? null;
+    const enGenus = species.genera.find((g) => g.language.name === "en")?.genus ?? null;
+    const thGenus = species.genera.find((g) => g.language.name === "th")?.genus ?? null;
+    const stats = {
+      hp:             pokemon.stats.find((s) => s.stat.name === "hp")?.base_stat ?? 0,
+      attack:         pokemon.stats.find((s) => s.stat.name === "attack")?.base_stat ?? 0,
+      defense:        pokemon.stats.find((s) => s.stat.name === "defense")?.base_stat ?? 0,
+      specialAttack:  pokemon.stats.find((s) => s.stat.name === "special-attack")?.base_stat ?? 0,
+      specialDefense: pokemon.stats.find((s) => s.stat.name === "special-defense")?.base_stat ?? 0,
+      speed:          pokemon.stats.find((s) => s.stat.name === "speed")?.base_stat ?? 0,
+      total: 0,
+    };
+    stats.total = stats.hp + stats.attack + stats.defense + stats.specialAttack + stats.specialDefense + stats.speed;
+    const flavorTexts = species.flavor_text_entries
+      .filter((ft) => ft.language.name === "en" || ft.language.name === "th")
+      .slice(0, 20)
+      .map((ft) => ({ text: ft.flavor_text.replace(/\f/g, " ").replace(/\n/g, " "), language: ft.language.name, version: ft.version.name }));
+    const baseName = pokemon.name.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    return {
+      id: pokemon.id, slug: pokemon.name, nameEn: baseName, nameTh: thName, nameJa: jaName, nameJaRomaji: jaRomaji,
+      dexNumber: pokemon.id, generation: parseGenerationFromUrl(species.generation.url),
+      species: enGenus, speciesTh: thGenus, color: species.color.name, shape: species.shape?.name ?? null,
+      habitat: species.habitat?.name ?? null, isMythical: species.is_mythical, isLegendary: species.is_legendary,
+      isBaby: species.is_baby, hasGenderDiff: species.has_gender_differences, genderRate: species.gender_rate,
+      captureRate: species.capture_rate, baseHappiness: species.base_happiness, baseExpYield: pokemon.base_experience,
+      growthRate: species.growth_rate.name, hatchCounter: species.hatch_counter,
+      heightDm: pokemon.height, weightHg: pokemon.weight, isDefault: pokemon.is_default, formName: null,
+      types: pokemon.types.map((t) => t.type.name) as PokemonDetail["types"], stats,
+      abilities: pokemon.abilities.map((a) => ({
+        id: parseInt(a.ability.url.split("/").filter(Boolean).pop() ?? "0"),
+        slug: a.ability.name, nameEn: a.ability.name.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
+        nameTh: null, slot: a.slot, isHidden: a.is_hidden, shortEffect: null, shortEffectTh: null,
+      })),
+      moves: pokemon.moves.slice(0, 50).map((m) => {
+        const vd = m.version_group_details[0];
+        return {
+          id: parseInt(m.move.url.split("/").filter(Boolean).pop() ?? "0"),
+          slug: m.move.name, nameEn: m.move.name.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
+          nameTh: null, typeName: null, category: null, power: null, accuracy: null, pp: null,
+          learnMethod: vd?.move_learn_method.name ?? "level-up", levelLearnedAt: vd?.level_learned_at ?? null,
+          versionGroup: vd?.version_group.name ?? null,
+        };
+      }),
+      sprites: {
+        frontDefault: pokemon.sprites.front_default, frontShiny: pokemon.sprites.front_shiny,
+        frontFemale: pokemon.sprites.front_female, frontShinyFemale: pokemon.sprites.front_shiny_female,
+        backDefault: pokemon.sprites.back_default, backShiny: pokemon.sprites.back_shiny,
+        officialArtwork: pokemon.sprites.other?.["official-artwork"]?.front_default ?? getArtworkUrl(pokemon.id),
+        officialArtworkShiny: pokemon.sprites.other?.["official-artwork"]?.front_shiny ?? null,
+        homeSprite: pokemon.sprites.other?.home?.front_default ?? null, homeShiny: pokemon.sprites.other?.home?.front_shiny ?? null,
+        showdownFront: pokemon.sprites.other?.showdown?.front_default ?? null, showdownShiny: pokemon.sprites.other?.showdown?.front_shiny ?? null,
+        animated: pokemon.sprites.versions?.["generation-v"]?.["black-white"]?.animated?.front_default ?? null,
+        animatedShiny: pokemon.sprites.versions?.["generation-v"]?.["black-white"]?.animated?.front_shiny ?? null,
+      },
+      cries: { latest: pokemon.cries.latest, legacy: pokemon.cries.legacy },
+      eggGroups: species.egg_groups.map((eg) => eg.name),
+      evolutions: evolutions.map((ev) => ({
+        fromId: ev.fromId, toId: 0, toSlug: ev.toSlug,
+        toName: ev.toSlug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
+        toNameTh: null, toSprite: null, trigger: ev.details?.trigger.name ?? "level-up",
+        minLevel: ev.details?.min_level ?? null,
+        itemName: ev.details?.item?.name ?? ev.details?.held_item?.name ?? null,
+        condition: ev.details?.time_of_day || null,
+      })),
+      locations: [], forms: [], flavorTexts,
+    };
   } catch {
     return null;
   }
