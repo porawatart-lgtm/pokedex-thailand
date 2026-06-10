@@ -15,7 +15,10 @@ import { cn } from "@/lib/utils";
 
 async function getPokemonDetail(id: string): Promise<PokemonDetail | null> {
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/pokemon/${id}`, {
+    const base = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000");
+    const res = await fetch(`${base}/api/pokemon/${id}`, {
       next: { revalidate: 3600 },
     });
     if (!res.ok) return null;
