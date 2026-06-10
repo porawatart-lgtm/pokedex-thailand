@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($env:PATH = \"C:\\\\nodejs;C:\\\\nodejs\\\\node_modules\\\\.bin;$env:PATH\"; Set-Location \"C:\\\\Users\\\\Asus TUF Gaming F15\\\\Desktop\\\\Pokemon\"; npm install --legacy-peer-deps 2>&1)",
+      "PowerShell(docker --version 2>&1)",
+      "PowerShell(docker compose version 2>&1)"
+    ]
+  }
+}

@@ -1,0 +1,837 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// AUTHENTICATION
+// ============================================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(USER)
+  bio           String?
+  region        String?
+  favoriteType  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts     Account[]
+  sessions     Session[]
+  teams        Team[]
+  dexEntries   UserDexEntry[]
+  achievements UserAchievement[]
+  posts        CommunityPost[]
+  comments     PostComment[]
+  votes        PostVote[]
+  trainerCard  TrainerCard?
+  wikiEdits    WikiEdit[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum UserRole {
+  USER
+  EDITOR
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+// ============================================================
+// POKEMON CORE DATA
+// ============================================================
+
+model Pokemon {
+  id              Int     @id
+  slug            String  @unique
+  nameEn          String
+  nameTh          String?
+  nameJa          String?
+  nameJaRomaji    String?
+  species         String?
+  speciesTh       String?
+  dexNumber       Int     @unique
+  generation      Int
+  color           String?
+  shape           String?
+  habitat         String?
+  isMythical      Boolean @default(false)
+  isLegendary     Boolean @default(false)
+  isBaby          Boolean @default(false)
+  hasGenderDiff   Boolean @default(false)
+  genderRate      Int?
+  captureRate     Int?
+  baseHappiness   Int?
+  baseExpYield    Int?
+  growthRate      String?
+  hatchCounter    Int?
+  heightDm        Int?
+  weightHg        Int?
+  formName        String?
+  isDefault       Boolean @default(true)
+  formOrder       Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  types          PokemonType[]
+  stats          PokemonStat[]
+  abilities      PokemonAbility[]
+  moves          PokemonMove[]
+  sprites        PokemonSprite?
+  cries          PokemonCry?
+  eggGroups      PokemonEggGroup[]
+  evolutions     Evolution[]       @relation("FromPokemon")
+  evolvesTo      Evolution[]       @relation("ToPokemon")
+  locations      PokemonLocation[]
+  forms          PokemonForm[]
+  teamSlots      TeamSlot[]
+  dexEntries     UserDexEntry[]
+  flavorTexts    PokemonFlavorText[]
+  encounters     PokemonEncounter[]
+
+  @@index([generation])
+  @@index([nameEn])
+  @@index([nameTh])
+  @@index([dexNumber])
+}
+
+model PokemonType {
+  id        Int     @id @default(autoincrement())
+  pokemonId Int
+  typeId    Int
+  slot      Int
+  pokemon   Pokemon @relation(fields: [pokemonId], references: [id], onDelete: Cascade)
+  type      Type    @relation(fields: [typeId], references: [id])
+
+  @@unique([pokemonId, slot])
+  @@index([pokemonId])
+  @@index([typeId])
+}
+
+model PokemonStat {
+  id        Int     @id @default(autoincrement())
+  pokemonId Int
+  statName  String
+  baseStat  Int
+  effort    Int     @default(0)
+  pokemon   Pokemon @relation(fields: [pokemonId], references: [id], onDelete: Cascade)
+
+  @@unique([pokemonId, statName])
+  @@index([pokemonId])
+}
+
+model PokemonAbility {
+  id        Int     @id @default(autoincrement())
+  pokemonId Int
+  abilityId Int
+  slot      Int
+  isHidden  Boolean @default(false)
+  pokemon   Pokemon @relation(fields: [pokemonId], references: [id], onDelete: Cascade)
+  ability   Ability @relation(fields: [abilityId], references: [id])
+
+  @@unique([pokemonId, slot])
+  @@index([pokemonId])
+  @@index([abilityId])
+}
+
+model PokemonMove {
+  id           Int       @id @default(autoincrement())
+  pokemonId    Int
+  moveId       Int
+  learnMethod  LearnMethod
+  levelLearnedAt Int?
+  versionGroup String?
+  pokemon      Pokemon   @relation(fields: [pokemonId], references: [id], onDelete: Cascade)
+  move         Move      @relation(fields: [moveId], references: [id])
+
+  @@index([pokemonId])
+  @@index([moveId])
+}
+
+model PokemonSprite {
+  id                   Int     @id @default(autoincrement())
+  pokemonId            Int     @unique
+  frontDefault         String?
+  frontShiny           String?
+  frontFemale          String?
+  frontShinyFemale     String?
+  backDefault          String?
+  backShiny            String?
+  officialArtwork      String?
+  officialArtworkShiny String?
+  homeSprite           String?
+  homeShiny            String?
+  showdownFront        String?
+  showdownShiny        String?
+  animated             String?
+  animatedShiny        String?
+  pokemon              Pokemon @relation(fields: [pokemonId], references: [id], onDelete: Cascade)
+}
+
+model PokemonCry {
+  id        Int     @id @default(autoincrement())
+  pokemonId Int     @unique
+  latest    String?
+  legacy    String?
+  pokemon   Pokemon @relation(fields: [pokemonId], references: [id], onDelete: Cascade)
+}
+
+model PokemonEggGroup {
+  id           Int        @id @default(autoincrement())
+  pokemonId    Int
+  eggGroupName String
+  pokemon      Pokemon    @relation(fields: [pokemonId], references: [id], onDelete: Cascade)
+
+  @@unique([pokemonId, eggGroupName])
+  @@index([pokemonId])
+}
+
+model PokemonFlavorText {
+  id           Int     @id @default(autoincrement())
+  pokemonId    Int
+  flavorText   String  @db.Text
+  language     String
+  versionName  String
+  pokemon      Pokemon @relation(fields: [pokemonId], references: [id], onDelete: Cascade)
+
+  @@index([pokemonId])
+  @@index([language])
+}
+
+model PokemonForm {
+  id         Int     @id @default(autoincrement())
+  pokemonId  Int
+  formName   String
+  formOrder  Int?
+  isDefault  Boolean @default(false)
+  isBattleOnly Boolean @default(false)
+  isMega     Boolean @default(false)
+  isGmax     Boolean @default(false)
+  sprites    Json?
+  pokemon    Pokemon @relation(fields: [pokemonId], references: [id], onDelete: Cascade)
+
+  @@index([pokemonId])
+}
+
+enum LearnMethod {
+  LEVEL_UP
+  TM
+  TR
+  HM
+  TUTOR
+  EGG
+  EVENT
+  FORM_CHANGE
+  STADIUM_SURFING_PIKACHU
+  LIGHT_BALL_EGG
+  COLOSSEUM_PURIFICATION
+  XD_SHADOW
+  XD_PURIFICATION
+  RECORD
+  VOUCHER
+}
+
+// ============================================================
+// TYPES
+// ============================================================
+
+model Type {
+  id          Int    @id
+  slug        String @unique
+  nameEn      String
+  nameTh      String?
+  nameJa      String?
+  color       String?
+  generation  Int?
+
+  // Type chart relations
+  attackingTo   TypeEffectiveness[] @relation("AttackingType")
+  defendingFrom TypeEffectiveness[] @relation("DefendingType")
+
+  // Pokemon using this type
+  pokemonTypes PokemonType[]
+  moves        Move[]
+}
+
+model TypeEffectiveness {
+  id              Int    @id @default(autoincrement())
+  attackingTypeId Int
+  defendingTypeId Int
+  multiplier      Float
+
+  attackingType Type @relation("AttackingType", fields: [attackingTypeId], references: [id])
+  defendingType Type @relation("DefendingType", fields: [defendingTypeId], references: [id])
+
+  @@unique([attackingTypeId, defendingTypeId])
+  @@index([attackingTypeId])
+  @@index([defendingTypeId])
+}
+
+// ============================================================
+// MOVES
+// ============================================================
+
+model Move {
+  id          Int     @id
+  slug        String  @unique
+  nameEn      String
+  nameTh      String?
+  nameJa      String?
+  typeId      Int?
+  category    MoveCategory?
+  power       Int?
+  accuracy    Int?
+  pp          Int?
+  priority    Int     @default(0)
+  effectChance Int?
+  generation  Int?
+  target      String?
+  damageClass String?
+  effect      String? @db.Text
+  effectTh    String? @db.Text
+  shortEffect String?
+  shortEffectTh String?
+  contestType  String?
+  contestEffect String?
+  superContestEffect String?
+  isContactMove Boolean @default(false)
+  isZMove      Boolean @default(false)
+  isMaxMove    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  type         Type?         @relation(fields: [typeId], references: [id])
+  pokemonMoves PokemonMove[]
+  teamSlotMoves TeamSlotMove[]
+
+  @@index([typeId])
+  @@index([category])
+  @@index([generation])
+}
+
+enum MoveCategory {
+  PHYSICAL
+  SPECIAL
+  STATUS
+}
+
+// ============================================================
+// ABILITIES
+// ============================================================
+
+model Ability {
+  id           Int    @id
+  slug         String @unique
+  nameEn       String
+  nameTh       String?
+  nameJa       String?
+  generation   Int?
+  effect       String? @db.Text
+  effectTh     String? @db.Text
+  shortEffect  String?
+  shortEffectTh String?
+  isMainSeries Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pokemonAbilities PokemonAbility[]
+  teamSlots        TeamSlot[]
+}
+
+// ============================================================
+// ITEMS
+// ============================================================
+
+model Item {
+  id          Int    @id
+  slug        String @unique
+  nameEn      String
+  nameTh      String?
+  nameJa      String?
+  category    String?
+  cost        Int?
+  effect      String? @db.Text
+  effectTh    String? @db.Text
+  shortEffect String?
+  sprite      String?
+  generation  Int?
+  flingPower  Int?
+  flingEffect String?
+  attributes  String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teamSlots TeamSlot[]
+
+  @@index([category])
+}
+
+// ============================================================
+// BERRIES
+// ============================================================
+
+model Berry {
+  id           Int    @id
+  slug         String @unique
+  nameEn       String
+  nameTh       String?
+  firmness     String?
+  naturalGiftPower Int?
+  naturalGiftTypeId Int?
+  size         Int?
+  maxHarvest   Int?
+  growthTime   Int?
+  soothingPower Int?
+  smoothness   Int?
+  flavors      Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================
+// EVOLUTION
+// ============================================================
+
+model Evolution {
+  id              Int     @id @default(autoincrement())
+  fromPokemonId   Int
+  toPokemonId     Int
+  trigger         EvolutionTrigger
+  minLevel        Int?
+  minHappiness    Int?
+  minAffection    Int?
+  minBeauty       Int?
+  timeOfDay       String?
+  needsOverworldRain Boolean @default(false)
+  turnUpsideDown  Boolean @default(false)
+  relativePhysicalStats Int?
+  heldItemId      Int?
+  useItemId       Int?
+  knownMoveId     Int?
+  knownMoveTypeId Int?
+  locationId      Int?
+  tradeSpeciesId  Int?
+  partySpeciesId  Int?
+  partyTypeId     Int?
+  genderRequired  Int?
+  itemName        String?
+  condition       String?
+
+  fromPokemon Pokemon @relation("FromPokemon", fields: [fromPokemonId], references: [id])
+  toPokemon   Pokemon @relation("ToPokemon", fields: [toPokemonId], references: [id])
+
+  @@index([fromPokemonId])
+  @@index([toPokemonId])
+}
+
+enum EvolutionTrigger {
+  LEVEL_UP
+  TRADE
+  USE_ITEM
+  SHED
+  SPIN
+  TOWER_OF_DARKNESS
+  TOWER_OF_WATERS
+  THREE_CRITICAL_HITS
+  TAKE_DAMAGE
+  AGILE_STYLE_MOVE
+  STRONG_STYLE_MOVE
+  RECOIL_DAMAGE
+  OTHER
+}
+
+// ============================================================
+// REGIONS & LOCATIONS
+// ============================================================
+
+model Region {
+  id         Int    @id @default(autoincrement())
+  slug       String @unique
+  nameEn     String
+  nameTh     String?
+  generation Int?
+  mainGame   String?
+
+  locations Location[]
+}
+
+model Location {
+  id       Int    @id @default(autoincrement())
+  slug     String @unique
+  nameEn   String
+  nameTh   String?
+  regionId Int?
+
+  region    Region?            @relation(fields: [regionId], references: [id])
+  pokemon   PokemonLocation[]
+  encounters PokemonEncounter[]
+
+  @@index([regionId])
+}
+
+model PokemonLocation {
+  id         Int     @id @default(autoincrement())
+  pokemonId  Int
+  locationId Int
+  pokemon    Pokemon  @relation(fields: [pokemonId], references: [id], onDelete: Cascade)
+  location   Location @relation(fields: [locationId], references: [id])
+
+  @@unique([pokemonId, locationId])
+  @@index([pokemonId])
+  @@index([locationId])
+}
+
+model PokemonEncounter {
+  id           Int    @id @default(autoincrement())
+  pokemonId    Int
+  locationId   Int
+  versionGroup String?
+  method       String?
+  minLevel     Int?
+  maxLevel     Int?
+  chance       Int?
+
+  pokemon  Pokemon  @relation(fields: [pokemonId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@index([pokemonId])
+  @@index([locationId])
+}
+
+// ============================================================
+// TEAM BUILDER
+// ============================================================
+
+model Team {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  format      String   @default("OU")
+  generation  Int      @default(9)
+  isPublic    Boolean  @default(false)
+  likes       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slots    TeamSlot[]
+  posts    CommunityPost[]
+  votes    PostVote[]
+
+  @@index([userId])
+  @@index([isPublic])
+  @@index([format])
+}
+
+model TeamSlot {
+  id         String  @id @default(cuid())
+  teamId     String
+  pokemonId  Int
+  slot       Int
+  nickname   String?
+  level      Int     @default(100)
+  gender     String?
+  shiny      Boolean @default(false)
+  nature     String?
+  abilityId  Int?
+  heldItemId Int?
+  evHp       Int     @default(0)
+  evAtk      Int     @default(0)
+  evDef      Int     @default(0)
+  evSpAtk    Int     @default(0)
+  evSpDef    Int     @default(0)
+  evSpeed    Int     @default(0)
+  ivHp       Int     @default(31)
+  ivAtk      Int     @default(31)
+  ivDef      Int     @default(31)
+  ivSpAtk    Int     @default(31)
+  ivSpDef    Int     @default(31)
+  ivSpeed    Int     @default(31)
+  teraType   String?
+
+  team    Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  pokemon Pokemon      @relation(fields: [pokemonId], references: [id])
+  ability Ability?     @relation(fields: [abilityId], references: [id])
+  heldItem Item?       @relation(fields: [heldItemId], references: [id])
+  moves   TeamSlotMove[]
+
+  @@unique([teamId, slot])
+  @@index([teamId])
+  @@index([pokemonId])
+}
+
+model TeamSlotMove {
+  id         String   @id @default(cuid())
+  teamSlotId String
+  moveId     Int
+  slot       Int
+
+  teamSlot TeamSlot @relation(fields: [teamSlotId], references: [id], onDelete: Cascade)
+  move     Move     @relation(fields: [moveId], references: [id])
+
+  @@unique([teamSlotId, slot])
+  @@index([teamSlotId])
+}
+
+// ============================================================
+// USER DEX (LIVING DEX)
+// ============================================================
+
+model UserDexEntry {
+  id          String   @id @default(cuid())
+  userId      String
+  pokemonId   Int
+  caught      Boolean  @default(false)
+  shiny       Boolean  @default(false)
+  alpha       Boolean  @default(false)
+  gigantamax  Boolean  @default(false)
+  caughtAt    DateTime?
+  notes       String?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pokemon Pokemon @relation(fields: [pokemonId], references: [id])
+
+  @@unique([userId, pokemonId])
+  @@index([userId])
+  @@index([pokemonId])
+}
+
+// ============================================================
+// TRAINER CARD
+// ============================================================
+
+model TrainerCard {
+  id              String  @id @default(cuid())
+  userId          String  @unique
+  trainerName     String
+  trainerTitle    String?
+  region          String?
+  favoriteType    String?
+  favoritePokemon Int?
+  avatarUrl       String?
+  badgesEarned    String[]
+  playtime        Int     @default(0)
+  cardStyle       String  @default("default")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// ACHIEVEMENTS
+// ============================================================
+
+model Achievement {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  nameEn      String
+  nameTh      String?
+  description String?
+  icon        String?
+  points      Int     @default(0)
+  category    String?
+  condition   Json?
+  rarity      String  @default("COMMON")
+
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  achievementId String
+  unlockedAt    DateTime @default(now())
+  progress      Int      @default(0)
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id])
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+}
+
+// ============================================================
+// COMMUNITY
+// ============================================================
+
+model CommunityPost {
+  id        String   @id @default(cuid())
+  userId    String
+  teamId    String?
+  title     String
+  content   String   @db.Text
+  type      PostType @default(TEAM_SHOWCASE)
+  tags      String[]
+  views     Int      @default(0)
+  likes     Int      @default(0)
+  isPinned  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team     Team?         @relation(fields: [teamId], references: [id])
+  comments PostComment[]
+  votes    PostVote[]
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model PostComment {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([userId])
+}
+
+model PostVote {
+  id     String   @id @default(cuid())
+  userId String
+  postId String?
+  teamId String?
+  value  Int
+
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post CommunityPost? @relation(fields: [postId], references: [id], onDelete: Cascade)
+  team Team?         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@unique([userId, teamId])
+  @@index([postId])
+  @@index([teamId])
+}
+
+enum PostType {
+  TEAM_SHOWCASE
+  BATTLE_REPORT
+  GUIDE
+  QUESTION
+  DISCUSSION
+  NEWS
+}
+
+// ============================================================
+// WIKI / CONTENT MANAGEMENT
+// ============================================================
+
+model WikiEdit {
+  id         String   @id @default(cuid())
+  userId     String
+  entityType String
+  entityId   String
+  field      String
+  oldValue   String?  @db.Text
+  newValue   String   @db.Text
+  reason     String?
+  status     WikiEditStatus @default(PENDING)
+  reviewedAt DateTime?
+  reviewedBy String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([status])
+}
+
+enum WikiEditStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ============================================================
+// COMPETITIVE DATA (Smogon-style)
+// ============================================================
+
+model CompetitiveTier {
+  id          String @id @default(cuid())
+  pokemonId   Int
+  generation  Int
+  format      String
+  tier        String
+  updatedAt   DateTime @updatedAt
+
+  @@unique([pokemonId, generation, format])
+  @@index([pokemonId])
+  @@index([tier])
+}
+
+model UsageStatistic {
+  id          String   @id @default(cuid())
+  pokemonId   Int
+  period      String
+  format      String
+  generation  Int
+  usagePercent Float
+  rank        Int?
+  rawCount    Int?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([pokemonId, period, format, generation])
+  @@index([pokemonId])
+  @@index([format])
+}

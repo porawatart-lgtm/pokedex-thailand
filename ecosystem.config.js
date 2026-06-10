@@ -1,0 +1,37 @@
+module.exports = {
+  apps: [
+    {
+      name: "pokedex-thailand",
+      script: "node_modules/next/dist/bin/next",
+      args: "start",
+      cwd: "C:\\Users\\Asus TUF Gaming F15\\Desktop\\Pokemon",
+      interpreter: "C:\\nodejs\\node.exe",
+      env: {
+        NODE_ENV: "production",
+        PORT: 3000,
+      },
+      watch: false,
+      autorestart: true,
+      restart_delay: 3000,
+      max_restarts: 10,
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+      out_file: "logs/out.log",
+      error_file: "logs/error.log",
+      merge_logs: true,
+    },
+    {
+      name: "cloudflare-tunnel",
+      script: "C:\\cloudflared\\run-tunnel.js",
+      interpreter: "C:\\nodejs\\node.exe",
+      cwd: "C:\\Users\\Asus TUF Gaming F15\\Desktop\\Pokemon",
+      watch: false,
+      autorestart: true,
+      restart_delay: 5000,
+      max_restarts: 10,
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+      out_file: "logs/cloudflared-out.log",
+      error_file: "logs/cloudflared-error.log",
+      merge_logs: true,
+    },
+  ],
+};

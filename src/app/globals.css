@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 0 80% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 0 80% 50%;
+    --radius: 0.75rem;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-secondary;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary;
+  }
+}
+
+@layer components {
+  /* Pokemon card hover effect */
+  .pokemon-card {
+    @apply relative overflow-hidden rounded-xl border border-border bg-card transition-all duration-300;
+  }
+
+  .pokemon-card:hover {
+    @apply border-primary/50 shadow-lg shadow-primary/10 -translate-y-1;
+  }
+
+  /* Type badge */
+  .type-badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold text-white uppercase tracking-wide;
+  }
+
+  /* Stat bar */
+  .stat-bar {
+    @apply h-2 rounded-full bg-secondary overflow-hidden;
+  }
+
+  .stat-bar-fill {
+    @apply h-full rounded-full transition-all duration-700 ease-out;
+  }
+
+  /* Glassmorphism card */
+  .glass-card {
+    @apply bg-card/50 backdrop-blur-md border border-white/10 rounded-xl;
+  }
+
+  /* Pokéball pattern overlay */
+  .pokeball-bg {
+    background-image: radial-gradient(circle at 50% 50%, transparent 30%, rgba(255, 255, 255, 0.03) 30%);
+    background-size: 60px 60px;
+  }
+
+  /* Grid pattern */
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+
+  /* Loading skeleton */
+  .skeleton {
+    @apply animate-pulse bg-muted rounded;
+  }
+
+  /* Shine effect */
+  .shine {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .shine::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      to bottom right,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: rotate(30deg);
+    transition: all 0.5s;
+    opacity: 0;
+  }
+
+  .shine:hover::after {
+    opacity: 1;
+    left: 100%;
+    top: 100%;
+  }
+}
+
+@layer utilities {
+  /* Text gradient */
+  .text-gradient {
+    @apply bg-gradient-to-r from-poke-red to-poke-yellow bg-clip-text text-transparent;
+  }
+
+  .text-gradient-blue {
+    @apply bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent;
+  }
+
+  /* Neon glow */
+  .glow-red {
+    box-shadow: 0 0 20px rgba(204, 0, 0, 0.3);
+  }
+
+  .glow-blue {
+    box-shadow: 0 0 20px rgba(0, 117, 190, 0.3);
+  }
+
+  /* Background noise texture */
+  .noise {
+    position: relative;
+  }
+
+  .noise::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    opacity: 0.03;
+    pointer-events: none;
+  }
+
+  /* Custom selection color */
+  ::selection {
+    @apply bg-primary/30 text-white;
+  }
+}
