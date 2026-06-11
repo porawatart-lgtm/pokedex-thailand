@@ -13,6 +13,7 @@ import { formatDexNumber, formatHeight, formatWeight, formatGenderRatio, formatC
 import type { PokemonDetail, PokemonTypeName } from "@/types/pokemon";
 import { cn } from "@/lib/utils";
 import { fetchPokemon, fetchPokemonSpecies, fetchEvolutionChain, flattenEvolutionChain, getArtworkUrl, parseGenerationFromUrl } from "@/lib/pokeapi";
+import { db } from "@/lib/db";
 
 async function getPokemonDetail(id: string): Promise<PokemonDetail | null> {
   try {
@@ -54,10 +55,22 @@ async function getPokemonDetail(id: string): Promise<PokemonDetail | null> {
       growthRate: species.growth_rate.name, hatchCounter: species.hatch_counter,
       heightDm: pokemon.height, weightHg: pokemon.weight, isDefault: pokemon.is_default, formName: null,
       types: pokemon.types.map((t) => t.type.name) as PokemonDetail["types"], stats,
-      abilities: pokemon.abilities.map((a) => ({
-        id: parseInt(a.ability.url.split("/").filter(Boolean).pop() ?? "0"),
-        slug: a.ability.name, nameEn: a.ability.name.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
-        nameTh: null, slot: a.slot, isHidden: a.is_hidden, shortEffect: null, shortEffectTh: null,
+      abilities: await Promise.all(pokemon.abilities.map(async (a) => {
+        const abilityId = parseInt(a.ability.url.split("/").filter(Boolean).pop() ?? "0");
+        const dbAbility = await db.ability.findUnique({
+          where: { id: abilityId },
+          select: { nameEn: true, nameTh: true, shortEffect: true, shortEffectTh: true },
+        });
+        return {
+          id: abilityId,
+          slug: a.ability.name,
+          nameEn: dbAbility?.nameEn ?? a.ability.name.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
+          nameTh: dbAbility?.nameTh ?? null,
+          slot: a.slot,
+          isHidden: a.is_hidden,
+          shortEffect: dbAbility?.shortEffect ?? null,
+          shortEffectTh: dbAbility?.shortEffectTh ?? null,
+        };
       })),
       moves: pokemon.moves.slice(0, 50).map((m) => {
         const vd = m.version_group_details[0];
@@ -370,8 +383,8 @@ export default async function PokemonDetailPage({
                           </span>
                         )}
                       </div>
-                      {a.shortEffect && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{a.shortEffect}</p>
+                      {(a.shortEffectTh ?? a.shortEffect) && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{a.shortEffectTh ?? a.shortEffect}</p>
                       )}
                     </div>
                   </div>
