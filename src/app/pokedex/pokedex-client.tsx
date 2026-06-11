@@ -67,10 +67,9 @@ interface GenSectionProps {
 
 function GenSection({ gen, viewMode, onSelectGen }: GenSectionProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
   const [shiny, setShiny] = useState(false);
 
-  // Lazy load: only fetch when section scrolls into viewport
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) setVisible(true); },
