@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Menu, X, ChevronDown, Sword, Book, Package,
-  Shield, Users, Trophy, Zap, Bot, Star, Sparkles, Gamepad2,
+  Users, Trophy, Zap, Bot, Star, Sparkles, Gamepad2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GAMES, GEN_INFO, PLATFORM_GAMES } from "@/lib/games-data";
@@ -40,7 +40,6 @@ const NAV_ITEMS: NavItem[] = [
       { label: "All Pokemon", labelTh: "โปเกมอนทั้งหมด", href: "/pokedex", descriptionTh: "ทุก Generation ทุก Form", icon: Book },
       { label: "Special Forms", labelTh: "ร่างพิเศษ", href: "/forms", descriptionTh: "เมก้า, กิกะแมกซ์, อาโลล่า, กาล่า ฯลฯ", icon: Sparkles },
       { label: "Shiny Dex", labelTh: "ชายนี่เด็กซ์", href: "/shiny", descriptionTh: "เปรียบเทียบ Normal vs Shiny", icon: Star },
-      { label: "Living Dex", labelTh: "ลิฟวิ่งเด็กซ์", href: "/living-dex", descriptionTh: "ติดตามโปเกมอนที่จับได้", icon: Shield },
     ],
   },
   // Games mega-menu — rendered separately
@@ -71,7 +70,6 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Tier List & Usage", labelTh: "Tier List & Usage", href: "/competitive", descriptionTh: "Smogon Stats อัปเดตรายเดือน", icon: Trophy },
       { label: "Team Builder", labelTh: "สร้างทีม", href: "/team-builder", descriptionTh: "สร้างและวิเคราะห์ทีม", icon: Users },
       { label: "Damage Calculator", labelTh: "คำนวณดาเมจ", href: "/calc", descriptionTh: "คำนวณดาเมจอย่างละเอียด", icon: Sword },
-      { label: "Battle Simulator", labelTh: "จำลองการต่อสู้", href: "/battle", descriptionTh: "จำลองการต่อสู้", icon: Zap },
     ],
   },
   {
