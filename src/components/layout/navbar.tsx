@@ -83,12 +83,6 @@ const NAV_ITEMS: NavItem[] = [
       { label: "AI Chat", labelTh: "AI แชท", href: "/ai-chat", descriptionTh: "ถาม AI เรื่อง Pokémon", icon: Bot },
     ],
   },
-  {
-    label: "Community",
-    labelTh: "คอมมูนิตี้",
-    href: "/community",
-    icon: Users,
-  },
 ];
 
 // ───────────────────────────────────────────
