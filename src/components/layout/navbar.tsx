@@ -70,6 +70,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Tier List & Usage", labelTh: "Tier List & Usage", href: "/competitive", descriptionTh: "Smogon Stats อัปเดตรายเดือน", icon: Trophy },
       { label: "Team Builder", labelTh: "สร้างทีม", href: "/team-builder", descriptionTh: "สร้างและวิเคราะห์ทีม", icon: Users },
       { label: "Damage Calculator", labelTh: "คำนวณดาเมจ", href: "/calc", descriptionTh: "คำนวณดาเมจอย่างละเอียด", icon: Sword },
+      { label: "Battle Simulator", labelTh: "จำลองการต่อสู้", href: "/battle", descriptionTh: "จำลองการต่อสู้", icon: Zap },
     ],
   },
   {
