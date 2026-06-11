@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { redis } from "@/lib/redis";
 
 export const runtime = "nodejs";
@@ -31,7 +31,6 @@ export async function GET(request: Request) {
     // 2. Revalidate Next.js pages
     revalidatePath("/pokedex", "layout");
     revalidatePath("/", "layout");
-    revalidateTag("pokemon");
     results.push("Revalidated Next.js cache");
 
     return NextResponse.json({
