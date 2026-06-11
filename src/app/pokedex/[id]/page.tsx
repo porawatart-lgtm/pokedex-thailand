@@ -12,7 +12,8 @@ import { getDualTypeDefenses } from "@/lib/type-chart";
 import { formatDexNumber, formatHeight, formatWeight, formatGenderRatio, formatCatchRate, getTypeColor, getEffectivenessLabel } from "@/lib/utils";
 import type { PokemonDetail, PokemonTypeName } from "@/types/pokemon";
 import { cn } from "@/lib/utils";
-import { fetchPokemon, fetchPokemonSpecies, fetchEvolutionChain, flattenEvolutionChain, getArtworkUrl, parseGenerationFromUrl, fetchMove, parseIdFromUrl, formatPokemonName } from "@/lib/pokeapi";
+import { fetchPokemon, fetchPokemonSpecies, fetchEvolutionChain, flattenEvolutionChain, getArtworkUrl, parseGenerationFromUrl, parseIdFromUrl, formatPokemonName } from "@/lib/pokeapi";
+import { MovesTable } from "@/components/pokemon/moves-table";
 import { db } from "@/lib/db";
 
 async function getPokemonDetail(id: string): Promise<PokemonDetail | null> {
@@ -72,37 +73,23 @@ async function getPokemonDetail(id: string): Promise<PokemonDetail | null> {
           shortEffectTh: dbAbility?.shortEffectTh ?? null,
         };
       })),
-      moves: await Promise.all(pokemon.moves.slice(0, 20).map(async (m) => {
+      moves: pokemon.moves.slice(0, 20).map((m) => {
         const vd = m.version_group_details[0];
-        const id = parseIdFromUrl(m.move.url);
-        let power: number | null = null;
-        let accuracy: number | null = null;
-        let pp: number | null = null;
-        let typeName: string | null = null;
-        let category: string | null = null;
-        try {
-          const md = await fetchMove(id);
-          power = md.power;
-          accuracy = md.accuracy;
-          pp = md.pp;
-          typeName = md.type.name;
-          category = md.damage_class.name;
-        } catch { /* skip if fetch fails */ }
         return {
-          id,
+          id: parseIdFromUrl(m.move.url),
           slug: m.move.name,
           nameEn: formatPokemonName(m.move.name),
           nameTh: null,
-          typeName,
-          category,
-          power,
-          accuracy,
-          pp,
+          typeName: null,
+          category: null,
+          power: null,
+          accuracy: null,
+          pp: null,
           learnMethod: vd?.move_learn_method.name ?? "level-up",
           levelLearnedAt: vd?.level_learned_at ?? null,
           versionGroup: vd?.version_group.name ?? null,
         };
-      })),
+      }),
       sprites: {
         frontDefault: pokemon.sprites.front_default, frontShiny: pokemon.sprites.front_shiny,
         frontFemale: pokemon.sprites.front_female, frontShinyFemale: pokemon.sprites.front_shiny_female,
@@ -502,69 +489,16 @@ export default async function PokemonDetailPage({
 
             {/* Moves Table */}
             <SectionCard title="ท่าโจมตี">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-muted-foreground text-xs uppercase">
-                      <th className="text-left pb-2 font-semibold">ท่า</th>
-                      <th className="text-left pb-2 font-semibold">Type</th>
-                      <th className="text-center pb-2 font-semibold">Cat</th>
-                      <th className="text-right pb-2 font-semibold">Pwr</th>
-                      <th className="text-right pb-2 font-semibold">Acc</th>
-                      <th className="text-right pb-2 font-semibold">PP</th>
-                      <th className="text-right pb-2 font-semibold">วิธี</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pokemon.moves.slice(0, 20).map((move) => (
-                      <tr key={`${move.id}-${move.learnMethod}`} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
-                        <td className="py-1.5 pr-2">
-                          <Link
-                            href={`/moves/${move.slug}`}
-                            className="font-medium hover:text-primary transition-colors"
-                          >
-                            {move.nameTh ?? move.nameEn}
-                          </Link>
-                        </td>
-                        <td className="py-1.5 pr-2">
-                          {move.typeName && (
-                            <TypeBadgeList types={[move.typeName]} size="xs" />
-                          )}
-                        </td>
-                        <td className="py-1.5 text-center pr-2">
-                          <span className={cn(
-                            "text-xs font-medium",
-                            move.category === "physical" && "text-orange-400",
-                            move.category === "special" && "text-blue-400",
-                            move.category === "status" && "text-gray-400",
-                          )}>
-                            {move.category === "physical" ? "PHY" : move.category === "special" ? "SPC" : "STS"}
-                          </span>
-                        </td>
-                        <td className="py-1.5 text-right pr-2 font-mono text-muted-foreground">
-                          {move.power ?? "—"}
-                        </td>
-                        <td className="py-1.5 text-right pr-2 font-mono text-muted-foreground">
-                          {move.accuracy ? `${move.accuracy}%` : "—"}
-                        </td>
-                        <td className="py-1.5 text-right pr-2 font-mono text-muted-foreground">
-                          {move.pp ?? "—"}
-                        </td>
-                        <td className="py-1.5 text-right text-xs text-muted-foreground">
-                          {move.learnMethod === "level-up"
-                            ? `Lv.${move.levelLearnedAt ?? "?"}`
-                            : move.learnMethod}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {pokemon.moves.length > 20 && (
-                  <p className="text-xs text-muted-foreground mt-2 text-center">
-                    แสดง 20 ท่าแรก จากทั้งหมด {pokemon.moves.length} ท่า
-                  </p>
-                )}
-              </div>
+              <MovesTable
+                moves={pokemon.moves.map((m) => ({
+                  id: m.id,
+                  slug: m.slug,
+                  nameEn: m.nameEn,
+                  learnMethod: m.learnMethod,
+                  levelLearnedAt: m.levelLearnedAt,
+                }))}
+                total={pokemon.moves.length}
+              />
             </SectionCard>
           </div>
         </div>
