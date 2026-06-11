@@ -181,10 +181,12 @@ export async function fetchPokemon(idOrSlug: string | number) {
   return data;
 }
 
-export async function fetchPokemonSpecies(idOrSlug: string | number) {
-  const data = await cachedFetch<PokeAPIPokemonSpecies>(
-    `${POKEAPI_BASE}/pokemon-species/${idOrSlug}`
-  );
+export async function fetchPokemonSpecies(idOrSlugOrUrl: string | number) {
+  const url =
+    typeof idOrSlugOrUrl === "string" && idOrSlugOrUrl.startsWith("http")
+      ? idOrSlugOrUrl
+      : `${POKEAPI_BASE}/pokemon-species/${idOrSlugOrUrl}`;
+  const data = await cachedFetch<PokeAPIPokemonSpecies>(url);
   return data;
 }
 
