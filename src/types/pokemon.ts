@@ -65,6 +65,7 @@ export interface PokemonDetail extends PokemonListItem {
   locations: LocationInfo[];
   forms: FormInfo[];
   flavorTexts: FlavorText[];
+  altForms?: { id: number; slug: string; nameEn: string }[];
 }
 
 export interface PokemonAbilityInfo {

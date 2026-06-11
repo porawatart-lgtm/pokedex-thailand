@@ -18,10 +18,9 @@ import { db } from "@/lib/db";
 
 async function getPokemonDetail(id: string): Promise<PokemonDetail | null> {
   try {
-    const [pokemon, species] = await Promise.all([
-      fetchPokemon(id),
-      fetchPokemonSpecies(id),
-    ]);
+    // Fetch pokemon first so we can use its species URL (handles alternate forms like greninja-ash)
+    const pokemon = await fetchPokemon(id);
+    const species = await fetchPokemonSpecies(pokemon.species.url);
     const [evChainData] = await Promise.all([
       fetchEvolutionChain(species.evolution_chain.url),
     ]);
@@ -112,6 +111,13 @@ async function getPokemonDetail(id: string): Promise<PokemonDetail | null> {
         condition: ev.details?.time_of_day || null,
       })),
       locations: [], forms: [], flavorTexts,
+      altForms: species.varieties
+        .filter((v) => !v.is_default)
+        .map((v) => ({
+          id: parseIdFromUrl(v.pokemon.url),
+          slug: v.pokemon.name,
+          nameEn: formatPokemonName(v.pokemon.name),
+        })),
     };
   } catch {
     return null;
@@ -484,6 +490,31 @@ export default async function PokemonDetailPage({
             {pokemon.forms.length > 0 && (
               <SectionCard title="ร่างพิเศษ">
                 <PokemonForms forms={pokemon.forms} />
+              </SectionCard>
+            )}
+
+            {/* Alternate Forms */}
+            {pokemon.altForms && pokemon.altForms.length > 0 && (
+              <SectionCard title="ร่างอื่นๆ">
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                  {pokemon.altForms.map((form) => (
+                    <Link
+                      key={form.slug}
+                      href={`/pokedex/${form.slug}`}
+                      className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-card/50 p-3 hover:border-primary/40 hover:bg-secondary/50 transition-all text-center"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${form.id}.png`}
+                        alt={form.nameEn}
+                        width={64}
+                        height={64}
+                        className="object-contain"
+                      />
+                      <span className="text-xs font-medium leading-tight">{form.nameEn}</span>
+                    </Link>
+                  ))}
+                </div>
               </SectionCard>
             )}
 
