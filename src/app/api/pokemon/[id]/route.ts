@@ -270,7 +270,7 @@ export async function GET(
       eggGroups: species.egg_groups.map((eg) => eg.name),
       evolutions: evolutions.map((ev) => ({
         fromId: ev.fromId,
-        toId: 0,
+        toId: ev.toId,
         toSlug: ev.toSlug,
         toName: ev.toSlug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
         toNameTh: null,

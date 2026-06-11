@@ -229,23 +229,19 @@ export function flattenEvolutionChain(
   fromId?: number,
   result: Array<{
     fromId: number;
+    toId: number;
     toSlug: string;
     details: EvolutionChainNode["evolution_details"][0] | null;
   }> = []
 ) {
   const speciesId = parseInt(node.species.url.split("/").filter(Boolean).pop() ?? "0");
 
-  if (fromId !== undefined && node.evolution_details.length > 0) {
+  if (fromId !== undefined) {
     result.push({
       fromId,
+      toId: speciesId,
       toSlug: node.species.name,
       details: node.evolution_details[0] ?? null,
-    });
-  } else if (fromId !== undefined) {
-    result.push({
-      fromId,
-      toSlug: node.species.name,
-      details: null,
     });
   }
 

@@ -105,6 +105,40 @@ export function PokemonArtworkSwitcher({
   );
 }
 
+// ─── Sprite with fallback chain ──────────────────────────────────────────────
+// New forms (e.g. Legends Z-A megas, id 10250+) often have official artwork but
+// no regular sprite in the PokeAPI sprites repo — try sprite, then artwork.
+
+const SPRITES_BASE = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon";
+
+export function FormSprite({ id, alt, size = 64 }: { id: number; alt: string; size?: number }) {
+  const [stage, setStage] = useState(0);
+  const urls = [`${SPRITES_BASE}/${id}.png`, `${SPRITES_BASE}/other/official-artwork/${id}.png`];
+
+  if (stage >= urls.length) {
+    return (
+      <div
+        className="flex items-center justify-center rounded-lg bg-secondary text-muted-foreground/40 text-xl"
+        style={{ width: size, height: size }}
+      >
+        ?
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={urls[stage]}
+      alt={alt}
+      width={size}
+      height={size}
+      className="object-contain"
+      onError={() => setStage((s) => s + 1)}
+    />
+  );
+}
+
 // ─── Form Card ────────────────────────────────────────────────────────────────
 
 function FormCard({ form }: { form: FormInfo }) {

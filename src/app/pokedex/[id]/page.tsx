@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
 import { CryPlayer } from "@/components/pokemon/cry-player";
-import { PokemonArtworkSwitcher, PokemonForms } from "@/components/pokemon/pokemon-forms";
+import { PokemonArtworkSwitcher, PokemonForms, FormSprite } from "@/components/pokemon/pokemon-forms";
 import { TypeBadgeList } from "@/components/pokemon/type-badge";
 import { StatSet } from "@/components/pokemon/stat-bar";
 import { TypeChartTable } from "@/components/pokemon/type-chart-table";
@@ -103,7 +103,7 @@ async function getPokemonDetail(id: string): Promise<PokemonDetail | null> {
       cries: { latest: pokemon.cries.latest, legacy: pokemon.cries.legacy },
       eggGroups: species.egg_groups.map((eg) => eg.name),
       evolutions: evolutions.map((ev) => ({
-        fromId: ev.fromId, toId: 0, toSlug: ev.toSlug,
+        fromId: ev.fromId, toId: ev.toId, toSlug: ev.toSlug,
         toName: ev.toSlug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
         toNameTh: null, toSprite: null, trigger: ev.details?.trigger.name ?? "level-up",
         minLevel: ev.details?.min_level ?? null,
@@ -503,14 +503,7 @@ export default async function PokemonDetailPage({
                       href={`/pokedex/${form.slug}`}
                       className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-card/50 p-3 hover:border-primary/40 hover:bg-secondary/50 transition-all text-center"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${form.id}.png`}
-                        alt={form.nameEn}
-                        width={64}
-                        height={64}
-                        className="object-contain"
-                      />
+                      <FormSprite id={form.id} alt={form.nameEn} size={64} />
                       <span className="text-xs font-medium leading-tight">{form.nameEn}</span>
                     </Link>
                   ))}
