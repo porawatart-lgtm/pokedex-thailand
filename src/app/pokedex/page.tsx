@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import { PokedexPageClient } from "./pokedex-client";
 
+export const dynamic = "force-dynamic";
+
 function LoadingGrid() {
   return (
     <div className="container mx-auto px-4 py-8">
