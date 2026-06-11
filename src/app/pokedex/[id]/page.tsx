@@ -12,7 +12,7 @@ import { getDualTypeDefenses } from "@/lib/type-chart";
 import { formatDexNumber, formatHeight, formatWeight, formatGenderRatio, formatCatchRate, getTypeColor, getEffectivenessLabel } from "@/lib/utils";
 import type { PokemonDetail, PokemonTypeName } from "@/types/pokemon";
 import { cn } from "@/lib/utils";
-import { fetchPokemon, fetchPokemonSpecies, fetchEvolutionChain, flattenEvolutionChain, getArtworkUrl, parseGenerationFromUrl } from "@/lib/pokeapi";
+import { fetchPokemon, fetchPokemonSpecies, fetchEvolutionChain, flattenEvolutionChain, getArtworkUrl, parseGenerationFromUrl, fetchMove, parseIdFromUrl, formatPokemonName } from "@/lib/pokeapi";
 import { db } from "@/lib/db";
 
 async function getPokemonDetail(id: string): Promise<PokemonDetail | null> {
@@ -72,16 +72,37 @@ async function getPokemonDetail(id: string): Promise<PokemonDetail | null> {
           shortEffectTh: dbAbility?.shortEffectTh ?? null,
         };
       })),
-      moves: pokemon.moves.slice(0, 50).map((m) => {
+      moves: await Promise.all(pokemon.moves.slice(0, 20).map(async (m) => {
         const vd = m.version_group_details[0];
+        const id = parseIdFromUrl(m.move.url);
+        let power: number | null = null;
+        let accuracy: number | null = null;
+        let pp: number | null = null;
+        let typeName: string | null = null;
+        let category: string | null = null;
+        try {
+          const md = await fetchMove(id);
+          power = md.power;
+          accuracy = md.accuracy;
+          pp = md.pp;
+          typeName = md.type.name;
+          category = md.damage_class.name;
+        } catch { /* skip if fetch fails */ }
         return {
-          id: parseInt(m.move.url.split("/").filter(Boolean).pop() ?? "0"),
-          slug: m.move.name, nameEn: m.move.name.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
-          nameTh: null, typeName: null, category: null, power: null, accuracy: null, pp: null,
-          learnMethod: vd?.move_learn_method.name ?? "level-up", levelLearnedAt: vd?.level_learned_at ?? null,
+          id,
+          slug: m.move.name,
+          nameEn: formatPokemonName(m.move.name),
+          nameTh: null,
+          typeName,
+          category,
+          power,
+          accuracy,
+          pp,
+          learnMethod: vd?.move_learn_method.name ?? "level-up",
+          levelLearnedAt: vd?.level_learned_at ?? null,
           versionGroup: vd?.version_group.name ?? null,
         };
-      }),
+      })),
       sprites: {
         frontDefault: pokemon.sprites.front_default, frontShiny: pokemon.sprites.front_shiny,
         frontFemale: pokemon.sprites.front_female, frontShinyFemale: pokemon.sprites.front_shiny_female,
