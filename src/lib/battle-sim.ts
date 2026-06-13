@@ -359,6 +359,7 @@ export interface SimMove {
   type: PokemonTypeName; category: BattleCategory;
   power: number; accuracy: number; pp: number; priority: number;
   ailment: string; ailmentChance: number; drain: number; recoil: number;
+  target: string;
 }
 
 export interface SimPokemon {

@@ -83,6 +83,7 @@ async function fetchMoveDetail(slug: string): Promise<SimMove | null> {
       ailmentChance: d.meta?.ailment_chance ?? 0,
       drain: Math.max(0, d.meta?.drain ?? 0),
       recoil: (d.meta?.recoil ?? 0) < 0 ? Math.abs(d.meta.recoil) : 0,
+      target: d.target?.name ?? "selected-pokemon",
     };
   } catch { return null; }
 }
@@ -121,7 +122,7 @@ async function autoPickMoves(poke: PokeData): Promise<SimMove[]> {
   const status = valid.filter(m => m.power === 0);
   const picked = [...damaging.slice(0, 4), ...status.slice(0, Math.max(0, 4 - Math.min(4, damaging.length)))].slice(0, 4);
   if (picked.length === 0) {
-    return [{ slug: "struggle", nameEn: "Struggle", nameTh: "สตรักเกิล", type: "normal", category: "physical", power: 50, accuracy: 0, pp: 1, priority: 0, ailment: "none", ailmentChance: 0, drain: 0, recoil: 25 }];
+    return [{ slug: "struggle", nameEn: "Struggle", nameTh: "สตรักเกิล", type: "normal", category: "physical", power: 50, accuracy: 0, pp: 1, priority: 0, ailment: "none", ailmentChance: 0, drain: 0, recoil: 25, target: "selected-pokemon" }];
   }
   return picked;
 }
@@ -165,6 +166,20 @@ function MoveTag({ category }: { category: string }) {
   if (category === "physical") return <span className="text-[9px] font-semibold text-orange-300 flex items-center gap-0.5"><Dumbbell className="h-2.5 w-2.5" />กายภาพ</span>;
   if (category === "special") return <span className="text-[9px] font-semibold text-purple-300 flex items-center gap-0.5"><Zap className="h-2.5 w-2.5" />พิเศษ</span>;
   return <span className="text-[9px] font-semibold text-gray-400 flex items-center gap-0.5"><Shield className="h-2.5 w-2.5" />สถานะ</span>;
+}
+
+function MoveRoleTag({ mv }: { mv: { category: string; target: string } }) {
+  if (mv.category !== "status") {
+    return <span className="text-[9px] font-semibold text-red-400 bg-red-950/40 border border-red-700/40 px-1.5 py-0.5 rounded-full">⚔️ โจมตี</span>;
+  }
+  const t = mv.target;
+  if (t === "user" || t === "users-field") {
+    return <span className="text-[9px] font-semibold text-blue-400 bg-blue-950/40 border border-blue-700/40 px-1.5 py-0.5 rounded-full">🔄 ตัวเอง</span>;
+  }
+  if (t === "ally" || t === "all-allies" || t === "user-or-ally" || t === "entire-field") {
+    return <span className="text-[9px] font-semibold text-green-400 bg-green-950/40 border border-green-700/40 px-1.5 py-0.5 rounded-full">💚 เพื่อน</span>;
+  }
+  return <span className="text-[9px] font-semibold text-yellow-400 bg-yellow-950/40 border border-yellow-700/40 px-1.5 py-0.5 rounded-full">💔 ลดสถิติ</span>;
 }
 
 // ─── Item picker constants ────────────────────────────────────────────────────
@@ -1107,16 +1122,17 @@ export default function BattlePage() {
                                   isZEligible ? "border-yellow-500/70 bg-yellow-950/30 hover:bg-yellow-950/50" :
                                     isDmxActive ? "border-red-500/40 bg-red-950/20 hover:bg-red-950/40" :
                                       "border-border/50 bg-secondary/20 hover:bg-secondary/50")}>
-                              <div className="flex items-center gap-1.5 mb-1">
+                              <div className="flex items-center gap-1 mb-1 flex-wrap">
                                 <TypeTag type={mv.type} />
                                 <MoveTag category={mv.category} />
                                 {isZEligible && <span className="text-[9px] bg-yellow-700 text-yellow-100 px-1 rounded font-bold">Z!</span>}
                                 {isDmxActive && mv.category !== "status" && <span className="text-[9px] bg-red-800 text-red-100 px-1 rounded font-bold">MAX</span>}
                               </div>
-                              <p className="font-semibold text-sm">{mv.nameTh && mv.nameTh !== mv.nameEn ? mv.nameTh : mv.nameEn}</p>
-                              <div className="flex gap-2 mt-0.5 text-[10px] text-muted-foreground">
-                                <span>{mv.power ? `พลัง ${mv.power}` : "—"}</span>
-                                <span>PP {mv.currentPp}/{mv.pp}</span>
+                              <p className="font-semibold text-sm leading-tight">{mv.nameTh && mv.nameTh !== mv.nameEn ? mv.nameTh : mv.nameEn}</p>
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <MoveRoleTag mv={mv} />
+                                <span className="text-[10px] text-muted-foreground">{mv.power ? `พลัง ${mv.power}` : ""}</span>
+                                <span className="text-[10px] text-muted-foreground">PP {mv.currentPp}/{mv.pp}</span>
                               </div>
                             </button>
                           );
