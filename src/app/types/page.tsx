@@ -264,6 +264,55 @@ function DualTypeCalc() {
   );
 }
 
+// ─── Quad Weakness Summary ────────────────────────────────────────────────────
+
+// Precomputed once: for each attacking type, which defending dual-type pairs result in 4x?
+const QUAD_BY_ATTACKER: Partial<Record<PokemonTypeName, [PokemonTypeName, PokemonTypeName][]>> = (() => {
+  const result: Partial<Record<PokemonTypeName, [PokemonTypeName, PokemonTypeName][]>> = {};
+  for (let i = 0; i < ALL_TYPES.length; i++) {
+    for (let j = i + 1; j < ALL_TYPES.length; j++) {
+      const d1 = ALL_TYPES[i], d2 = ALL_TYPES[j];
+      const defs = getDualTypeDefenses([d1, d2]);
+      ALL_TYPES.forEach((atk) => {
+        if (defs[atk] === 4) {
+          if (!result[atk]) result[atk] = [];
+          result[atk]!.push([d1, d2]);
+        }
+      });
+    }
+  }
+  return result;
+})();
+
+function QuadWeaknessSummary() {
+  return (
+    <div className="rounded-2xl border border-red-500/30 bg-red-950/20 p-4">
+      <p className="flex items-center gap-1.5 text-[11px] font-bold text-red-400 mb-3">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        คู่ธาตุที่แพ้ 4× — แยกตามธาตุโจมตี
+      </p>
+      <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+        {(Object.entries(QUAD_BY_ATTACKER) as [PokemonTypeName, [PokemonTypeName, PokemonTypeName][]][]).map(([atk, pairs]) => (
+          <div key={atk} className="flex items-start gap-2">
+            <div className="shrink-0">
+              <TypePill type={atk} />
+            </div>
+            <div className="flex flex-wrap gap-1 pt-0.5">
+              {pairs.map(([d1, d2]) => (
+                <span key={`${d1}/${d2}`} className="flex items-center gap-0.5 rounded-full bg-secondary/60 px-1.5 py-0.5">
+                  <span className="text-[9px] font-bold" style={{ color: TYPE_COLORS[d1] }}>{TYPE_NAMES_TH[d1]}</span>
+                  <span className="text-[8px] text-muted-foreground/50">/</span>
+                  <span className="text-[9px] font-bold" style={{ color: TYPE_COLORS[d2] }}>{TYPE_NAMES_TH[d2]}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TypeChartPage() {
@@ -392,13 +441,8 @@ export default function TypeChartPage() {
             {selected ? (
               <TypeDetail key={selected} type={selected} />
             ) : (
-              <motion.div
-                key="placeholder"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="rounded-2xl border border-dashed border-border p-8 text-center text-muted-foreground text-sm"
-              >
-                คลิกธาตุในตารางเพื่อดูรายละเอียด
+              <motion.div key="quad-summary" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <QuadWeaknessSummary />
               </motion.div>
             )}
           </AnimatePresence>
