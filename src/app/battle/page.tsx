@@ -1,19 +1,26 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import { Search, Swords, RefreshCw, ChevronRight, X, Loader2, Trophy, Skull, Zap, Shield, Dumbbell } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Search, Swords, RefreshCw, X, Loader2, Trophy, Skull, Zap, Shield, Dumbbell, Package } from "lucide-react";
 import { cn, getTypeColor } from "@/lib/utils";
 import { TYPE_NAMES_TH } from "@/lib/type-chart";
 import type { PokemonTypeName } from "@/types/pokemon";
-import { buildSimPokemon, processTurn, getSimEff, simCalcHp, simCalcStat, type SimMove, type SimPokemon, type BattleMode, type BattleState, type BattleLogEntry, type PlayerAction } from "@/lib/battle-sim";
+import {
+  buildSimPokemon, processTurn, getSimEff, simCalcHp, simCalcStat,
+  applyTeamEntryEffects, BATTLE_ABILITIES, HELD_ITEMS,
+  type SimMove, type SimPokemon, type BattleMode, type BattleState, type BattleLogEntry, type PlayerAction,
+} from "@/lib/battle-sim";
 
 // ─── PokeAPI helpers ──────────────────────────────────────────────────────────
+
+interface PokeAbility { slug: string; nameEn: string; isHidden: boolean }
 
 interface PokeData {
   id: number; slug: string; nameEn: string; nameTh: string;
   types: PokemonTypeName[];
   baseStats: { hp: number; attack: number; defense: number; specialAttack: number; specialDefense: number; speed: number };
   levelUpMoves: { slug: string; nameEn: string; level: number }[];
+  abilities: PokeAbility[];
 }
 
 async function fetchPokeData(query: string): Promise<PokeData | null> {
@@ -33,6 +40,11 @@ async function fetchPokeData(query: string): Promise<PokeData | null> {
       }))
       .sort((a: any, b: any) => b.level - a.level)
       .slice(0, 24);
+    const abilities: PokeAbility[] = poke.abilities.map((a: any) => ({
+      slug: a.ability.name,
+      nameEn: a.ability.name.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
+      isHidden: a.is_hidden,
+    }));
     return {
       id: poke.id, slug: poke.name,
       nameEn: poke.name.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
@@ -47,6 +59,7 @@ async function fetchPokeData(query: string): Promise<PokeData | null> {
         speed: poke.stats.find((s: any) => s.stat.name === "speed")?.base_stat ?? 0,
       },
       levelUpMoves: luMoves,
+      abilities,
     };
   } catch { return null; }
 }
@@ -98,8 +111,15 @@ async function autoPickMoves(poke: PokeData): Promise<SimMove[]> {
 
 // ─── Setup Types ──────────────────────────────────────────────────────────────
 
-interface SlotState { pokemon: PokeData | null; moves: SimMove[]; availableMoves: SimMove[]; loadingMoves: boolean }
-const emptySlot = (): SlotState => ({ pokemon: null, moves: [], availableMoves: [], loadingMoves: false });
+interface SlotState {
+  pokemon: PokeData | null;
+  moves: SimMove[];
+  availableMoves: SimMove[];
+  loadingMoves: boolean;
+  selectedAbility: string;
+  selectedItem: string | null;
+}
+const emptySlot = (): SlotState => ({ pokemon: null, moves: [], availableMoves: [], loadingMoves: false, selectedAbility: "", selectedItem: null });
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -132,9 +152,10 @@ function MoveTag({ category }: { category: string }) {
 
 // ─── Pokemon Slot (setup) ─────────────────────────────────────────────────────
 
-function PokemonSlot({ slot, label, onSet, onClear, onOpenMovePicker }: {
+function PokemonSlot({ slot, label, onSet, onClear, onOpenMovePicker, onAbilityChange, onItemChange }: {
   slot: SlotState; label: string;
   onSet: (p: PokeData) => void; onClear: () => void; onOpenMovePicker: () => void;
+  onAbilityChange: (slug: string) => void; onItemChange: (slug: string | null) => void;
 }) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -151,7 +172,8 @@ function PokemonSlot({ slot, label, onSet, onClear, onOpenMovePicker }: {
 
   if (slot.pokemon) {
     const p = slot.pokemon;
-    const ready = slot.moves.length === 4;
+    const ready = slot.moves.length > 0;
+    const selectedAbilityInfo = BATTLE_ABILITIES[slot.selectedAbility];
     return (
       <div className="rounded-xl border border-border bg-card/50 p-3 space-y-2">
         <div className="flex items-center gap-2">
@@ -163,6 +185,7 @@ function PokemonSlot({ slot, label, onSet, onClear, onOpenMovePicker }: {
           </div>
           <button type="button" title="ลบโปเกมอน" onClick={onClear} className="text-muted-foreground hover:text-foreground p-1"><X className="h-3.5 w-3.5" /></button>
         </div>
+
         <div className="text-[10px] text-muted-foreground grid grid-cols-3 gap-1">
           <span>HP: {simCalcHp(p.baseStats.hp)}</span>
           <span>Atk: {simCalcStat(p.baseStats.attack)}</span>
@@ -171,8 +194,43 @@ function PokemonSlot({ slot, label, onSet, onClear, onOpenMovePicker }: {
           <span>SpD: {simCalcStat(p.baseStats.specialDefense)}</span>
           <span>Spe: {simCalcStat(p.baseStats.speed)}</span>
         </div>
-        <button onClick={onOpenMovePicker} className={cn("w-full text-xs py-1.5 rounded-lg border transition-colors", ready ? "border-green-600 bg-green-950/40 text-green-400" : "border-orange-600/50 bg-orange-950/30 text-orange-400 hover:bg-orange-950/50")}>
-          {slot.loadingMoves ? <span className="flex items-center justify-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />กำลังโหลดท่า...</span> : ready ? `✓ ${slot.moves.map(m => m.nameTh || m.nameEn).join(", ")}` : `เลือกท่า (${slot.moves.length}/4)`}
+
+        {/* Ability picker */}
+        <div className="space-y-1">
+          <p className="text-[10px] text-muted-foreground font-medium">Ability:</p>
+          <div className="flex flex-wrap gap-1">
+            {p.abilities.map(a => {
+              const isSelected = slot.selectedAbility === a.slug;
+              const info = BATTLE_ABILITIES[a.slug];
+              return (
+                <button key={a.slug} type="button" onClick={() => onAbilityChange(a.slug)}
+                  title={info?.descTh ?? a.nameEn}
+                  className={cn("text-[10px] px-2 py-0.5 rounded-full border transition-colors", isSelected ? "border-primary bg-primary/20 text-primary font-semibold" : "border-border text-muted-foreground hover:text-foreground hover:border-border/80")}>
+                  {info?.nameTh ?? a.nameEn}{a.isHidden ? " *" : ""}
+                </button>
+              );
+            })}
+          </div>
+          {selectedAbilityInfo && (
+            <p className="text-[10px] text-primary/70">{selectedAbilityInfo.descTh}</p>
+          )}
+        </div>
+
+        {/* Item picker */}
+        <div className="space-y-1">
+          <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1"><Package className="h-2.5 w-2.5" />Held Item:</p>
+          <select title="เลือกไอเทม" aria-label="เลือกไอเทม" value={slot.selectedItem ?? ""} onChange={e => onItemChange(e.target.value || null)}
+            className="w-full text-[11px] bg-secondary/50 border border-border rounded-lg px-2 py-1 outline-none focus:border-primary/50 text-foreground">
+            <option value="">— ไม่มีไอเทม —</option>
+            {Object.entries(HELD_ITEMS).map(([slug, item]) => (
+              <option key={slug} value={slug}>{item.nameTh} — {item.descTh}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Moves button */}
+        <button type="button" onClick={onOpenMovePicker} className={cn("w-full text-xs py-1.5 rounded-lg border transition-colors", ready ? "border-green-600 bg-green-950/40 text-green-400" : "border-orange-600/50 bg-orange-950/30 text-orange-400 hover:bg-orange-950/50")}>
+          {slot.loadingMoves ? <span className="flex items-center justify-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />กำลังโหลดท่า...</span> : ready ? `✓ ${slot.moves.map(m => m.nameTh && m.nameTh !== m.nameEn ? m.nameTh : m.nameEn).join(", ")}` : `เลือกท่า (${slot.moves.length}/4)`}
         </button>
       </div>
     );
@@ -183,7 +241,7 @@ function PokemonSlot({ slot, label, onSet, onClear, onOpenMovePicker }: {
       <p className="text-xs text-muted-foreground">{label}</p>
       <div className="flex gap-1.5">
         <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && search()} placeholder="ชื่อ/เลขโปเกมอน..." className="flex-1 text-xs bg-secondary/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/50" />
-        <button onClick={search} disabled={loading} className="px-2 py-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary transition-colors disabled:opacity-50">
+        <button type="button" onClick={search} disabled={loading} className="px-2 py-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary transition-colors disabled:opacity-50">
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
         </button>
       </div>
@@ -194,30 +252,65 @@ function PokemonSlot({ slot, label, onSet, onClear, onOpenMovePicker }: {
 
 // ─── Move Picker Modal ────────────────────────────────────────────────────────
 
-function MovePickerModal({ poke, availableMoves, selectedMoves, loading, onToggle, onClose }: {
+function MovePickerModal({ poke, availableMoves, selectedMoves, loading, onToggle, onClose, onAddMove }: {
   poke: PokeData; availableMoves: SimMove[]; selectedMoves: SimMove[]; loading: boolean;
-  onToggle: (m: SimMove) => void; onClose: () => void;
+  onToggle: (m: SimMove) => void; onClose: () => void; onAddMove: (m: SimMove) => void;
 }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchErr, setSearchErr] = useState("");
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true); setSearchErr("");
+    const slug = searchQuery.trim().toLowerCase().replace(/\s+/g, "-");
+    const already = availableMoves.find(m => m.slug === slug);
+    if (already) { setSearchQuery(""); setSearching(false); return; }
+    const move = await fetchMoveDetail(slug);
+    setSearching(false);
+    if (move) { onAddMove(move); setSearchQuery(""); }
+    else setSearchErr(`ไม่พบท่า "${searchQuery}" — ลองชื่อภาษาอังกฤษ เช่น flamethrower, ice-beam, earthquake`);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-lg bg-card border border-border rounded-2xl p-5 shadow-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
+      <div className="w-full max-w-lg bg-card border border-border rounded-2xl p-5 shadow-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <img src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${poke.id}.png`} alt="" width={36} height={36} style={{ imageRendering: "pixelated" }} />
             <div>
               <p className="font-bold text-sm">{poke.nameTh ?? poke.nameEn}</p>
-              <p className="text-[11px] text-muted-foreground">เลือก 4 ท่า ({selectedMoves.length}/4)</p>
+              <p className="text-[11px] text-muted-foreground">เลือกได้สูงสุด 4 ท่า ({selectedMoves.length}/4)</p>
             </div>
           </div>
           <button type="button" title="ปิด" onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
         </div>
+
+        {/* Any-move search */}
+        <div className="mb-3 space-y-1.5">
+          <p className="text-[10px] text-muted-foreground font-medium">🔍 ค้นหาท่าจากทั่วจักรวาลโปเกมอน (พิมพ์ชื่อภาษาอังกฤษ):</p>
+          <div className="flex gap-1.5">
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSearch()}
+              placeholder="เช่น flamethrower, close-combat, dragon-dance..."
+              className="flex-1 text-xs bg-secondary/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/50" />
+            <button type="button" onClick={handleSearch} disabled={searching || !searchQuery.trim()}
+              className="px-3 py-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary text-xs transition-colors disabled:opacity-50 flex items-center gap-1">
+              {searching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+            </button>
+          </div>
+          {searchErr && <p className="text-[10px] text-red-400">{searchErr}</p>}
+        </div>
+
+        <div className="border-t border-border/30 mb-2" />
+
         {loading ? (
           <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" /><span className="text-sm">กำลังโหลดท่า...</span>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
-            {availableMoves.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">ไม่พบข้อมูลท่า</p>}
+            <p className="text-[10px] text-muted-foreground mb-1">ท่าในคลัง ({availableMoves.length} ท่า):</p>
+            {availableMoves.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">ไม่มีท่าในคลัง — ค้นหาท่าด้านบน</p>}
             {availableMoves.map(mv => {
               const sel = selectedMoves.some(s => s.slug === mv.slug);
               const disabled = !sel && selectedMoves.length >= 4;
@@ -226,9 +319,9 @@ function MovePickerModal({ poke, availableMoves, selectedMoves, loading, onToggl
                   className={cn("w-full text-left rounded-xl p-2.5 border transition-colors", sel ? "border-primary bg-primary/15" : disabled ? "border-border/30 opacity-40 cursor-not-allowed" : "border-border/50 bg-secondary/20 hover:bg-secondary/40")}>
                   <div className="flex items-center gap-2">
                     <TypeTag type={mv.type} />
-                    <span className="font-semibold text-sm flex-1">{mv.nameTh !== mv.nameEn ? mv.nameTh : mv.nameEn}</span>
+                    <span className="font-semibold text-sm flex-1">{mv.nameTh && mv.nameTh !== mv.nameEn ? mv.nameTh : mv.nameEn}</span>
                     <MoveTag category={mv.category} />
-                    <span className="text-xs text-muted-foreground w-12 text-right">{mv.power ? `威力 ${mv.power}` : "—"}</span>
+                    <span className="text-xs text-muted-foreground w-14 text-right">{mv.power ? `พลัง ${mv.power}` : "—"}</span>
                     <span className="text-[10px] text-muted-foreground">PP {mv.pp}</span>
                   </div>
                 </button>
@@ -237,8 +330,8 @@ function MovePickerModal({ poke, availableMoves, selectedMoves, loading, onToggl
           </div>
         )}
         {selectedMoves.length === 4 && (
-          <button onClick={onClose} className="mt-4 w-full py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">
-            ยืนยัน 4 ท่า
+          <button type="button" onClick={onClose} className="mt-4 w-full py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">
+            ยืนยัน {selectedMoves.length} ท่า
           </button>
         )}
       </div>
@@ -251,6 +344,8 @@ function MovePickerModal({ poke, availableMoves, selectedMoves, loading, onToggl
 function BattleCard({ pokemon, side, isActive }: { pokemon: SimPokemon; side: "player" | "opponent"; isActive: boolean }) {
   const pct = pokemon.maxHp > 0 ? (pokemon.currentHp / pokemon.maxHp) * 100 : 0;
   const spriteUrl = side === "player" ? pokemon.backSpriteUrl : pokemon.spriteUrl;
+  const abilityInfo = BATTLE_ABILITIES[pokemon.ability];
+  const itemInfo = pokemon.heldItem ? HELD_ITEMS[pokemon.heldItem] : null;
 
   return (
     <div className={cn("rounded-xl border p-3 transition-all", isActive ? "border-primary/40 bg-primary/5" : "border-border/30 bg-card/30 opacity-60")}>
@@ -267,6 +362,8 @@ function BattleCard({ pokemon, side, isActive }: { pokemon: SimPokemon; side: "p
           <div className="flex items-center gap-1.5 mb-1">
             <span className="font-bold text-sm">{pokemon.nameTh || pokemon.nameEn}</span>
             <StatusPill status={pokemon.status} />
+            {pokemon.choiceLockedMove !== null && <span className="text-[8px] bg-yellow-900/60 text-yellow-300 px-1 rounded">ล็อค</span>}
+            {pokemon.flashFireActive && <span className="text-[8px]">🔥</span>}
           </div>
           <div className="flex gap-1 mb-1.5">{pokemon.types.map(t => <TypeTag key={t} type={t} />)}</div>
           <HpBar current={pokemon.currentHp} max={pokemon.maxHp} />
@@ -274,6 +371,12 @@ function BattleCard({ pokemon, side, isActive }: { pokemon: SimPokemon; side: "p
             <span>{pokemon.currentHp}/{pokemon.maxHp} HP</span>
             <span>{Math.round(pct)}%</span>
           </div>
+          {(abilityInfo || itemInfo) && (
+            <div className="mt-1 text-[9px] text-muted-foreground/70 truncate">
+              {abilityInfo && <span>✨ {abilityInfo.nameTh}</span>}
+              {itemInfo && <span> · 🎒 {itemInfo.nameTh}</span>}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -313,13 +416,11 @@ export default function BattlePage() {
   const [mode, setMode] = useState<BattleMode>("single");
   const teamSize = mode === "single" ? 3 : 4;
 
-  // Setup
   const [playerSlots, setPlayerSlots] = useState<SlotState[]>([emptySlot(), emptySlot(), emptySlot(), emptySlot()]);
   const [opponentSlots, setOpponentSlots] = useState<SlotState[]>([emptySlot(), emptySlot(), emptySlot(), emptySlot()]);
   const [movePicker, setMovePicker] = useState<{ side: "player" | "opponent"; idx: number } | null>(null);
   const [autoFilling, setAutoFilling] = useState(false);
 
-  // Battle
   const [battle, setBattle] = useState<BattleState | null>(null);
   const [battleLog, setBattleLog] = useState<BattleLogEntry[]>([]);
   const [inputSlot, setInputSlot] = useState(0);
@@ -327,15 +428,14 @@ export default function BattlePage() {
   const [pendingActions, setPendingActions] = useState<PlayerAction[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Derived
   const activeSlots = (side: "player" | "opponent") => {
     if (!battle) return [];
     const indices = side === "player" ? battle.playerActive : battle.opponentActive;
     const team = side === "player" ? battle.playerTeam : battle.opponentTeam;
     return indices.map(i => team[i]).filter(Boolean);
   };
+  void activeSlots;
   const currentPlayerPokemon = battle ? battle.playerTeam[battle.playerActive[inputSlot] ?? battle.playerActive[0]] : null;
-  const activeOpponents = battle ? battle.opponentActive.map(i => battle.opponentTeam[i]) : [];
 
   // ── Slot helpers ──────────────────────────────────────────────────────────
 
@@ -345,7 +445,8 @@ export default function BattlePage() {
   };
 
   const handleSetPokemon = (side: "player" | "opponent", idx: number, p: PokeData) => {
-    setSlot(side, idx, { pokemon: p, moves: [], availableMoves: [], loadingMoves: false });
+    const firstAbility = p.abilities.find(a => !a.isHidden)?.slug ?? p.abilities[0]?.slug ?? "";
+    setSlot(side, idx, { pokemon: p, moves: [], availableMoves: [], loadingMoves: false, selectedAbility: firstAbility, selectedItem: null });
   };
 
   const openMovePicker = async (side: "player" | "opponent", idx: number) => {
@@ -368,14 +469,23 @@ export default function BattlePage() {
     setSlot(side, idx, { moves: newMoves });
   };
 
+  const addMoveToAvailable = (side: "player" | "opponent", idx: number, mv: SimMove) => {
+    const slots = side === "player" ? playerSlots : opponentSlots;
+    const slot = slots[idx];
+    if (!slot.availableMoves.some(m => m.slug === mv.slug)) {
+      setSlot(side, idx, { availableMoves: [...slot.availableMoves, mv] });
+    }
+  };
+
   // ── Auto-fill opponent ─────────────────────────────────────────────────────
 
   const handleAutoFill = async () => {
     setAutoFilling(true);
     const pokemons = await autoFillTeam(teamSize);
-    const newSlots = await Promise.all(pokemons.map(async (p, i) => {
+    const newSlots = await Promise.all(pokemons.map(async (p) => {
       const moves = await autoPickMoves(p);
-      return { pokemon: p, moves, availableMoves: [], loadingMoves: false } as SlotState;
+      const firstAbility = p.abilities.find(a => !a.isHidden)?.slug ?? p.abilities[0]?.slug ?? "";
+      return { pokemon: p, moves, availableMoves: [], loadingMoves: false, selectedAbility: firstAbility, selectedItem: null } as SlotState;
     }));
     setOpponentSlots(prev => prev.map((s, i) => newSlots[i] ?? s));
     setAutoFilling(false);
@@ -394,6 +504,8 @@ export default function BattlePage() {
         types: s.pokemon!.types,
         baseStats: s.pokemon!.baseStats,
         moves: s.moves,
+        ability: s.selectedAbility,
+        heldItem: s.selectedItem,
       })
     );
   };
@@ -410,8 +522,10 @@ export default function BattlePage() {
     if (!playerTeam.length || !opponentTeam.length) return;
     const playerActive = mode === "single" ? [0] : [0, Math.min(1, playerTeam.length - 1)];
     const opponentActive = mode === "single" ? [0] : [0, Math.min(1, opponentTeam.length - 1)];
-    setBattle({ mode, playerTeam, opponentTeam, playerActive, opponentActive, turn: 1, logSeed: 1, winner: null });
-    setBattleLog([]);
+    const initialState: BattleState = { mode, playerTeam, opponentTeam, playerActive, opponentActive, turn: 1, logSeed: 1, winner: null };
+    const { state, log } = applyTeamEntryEffects(initialState);
+    setBattle(state);
+    setBattleLog(log);
     setPendingActions([]);
     setInputSlot(0);
     setPendingMoveIdx(null);
@@ -434,7 +548,6 @@ export default function BattlePage() {
     const action: PlayerAction = { activeSlot: inputSlot, moveIndex: pendingMoveIdx, targetSlot };
     const newPending = [...pendingActions, action];
     setPendingMoveIdx(null);
-
     const numActive = mode === "double" ? Math.min(2, battle.playerActive.length) : 1;
     if (newPending.length >= numActive) {
       setPendingActions([]);
@@ -466,18 +579,15 @@ export default function BattlePage() {
     setOpponentSlots([emptySlot(), emptySlot(), emptySlot(), emptySlot()]);
   };
 
-  // ─── Move picker slot data ───────────────────────────────────────────────
-
   const pickerSlot = movePicker ? (movePicker.side === "player" ? playerSlots : opponentSlots)[movePicker.idx] : null;
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-2"><Swords className="h-6 w-6 text-primary" />จำลองการต่อสู้</h1>
-        <p className="text-sm text-muted-foreground">ทดสอบโปเกมอนในโหมดต่อสู้เดี่ยวและคู่</p>
+        <p className="text-sm text-muted-foreground">เลือกโปเกมอน Ability ไอเทม และท่าได้อย่างอิสระ</p>
       </div>
 
       {/* ─── MODE SELECT ─────────────────────────────────────────────────── */}
@@ -498,12 +608,11 @@ export default function BattlePage() {
       {phase === "setup" && (
         <div className="space-y-6">
           <div className="flex items-center gap-3">
-            <button onClick={() => setPhase("mode")} className="text-muted-foreground hover:text-foreground text-sm">← เลือกโหมด</button>
+            <button type="button" onClick={() => setPhase("mode")} className="text-muted-foreground hover:text-foreground text-sm">← เลือกโหมด</button>
             <span className="text-sm text-muted-foreground">โหมด: <strong className="text-foreground">{mode === "single" ? "1v1 เดี่ยว" : "2v2 คู่"}</strong> · ต้องการ {teamSize} โปเกมอน/ฝ่าย</span>
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
-            {/* Player team */}
             <div>
               <h2 className="text-sm font-bold mb-3 text-blue-400">🛡️ ทีมของคุณ</h2>
               <div className="space-y-3">
@@ -511,16 +620,17 @@ export default function BattlePage() {
                   <PokemonSlot key={i} slot={playerSlots[i]} label={`ช่อง ${i + 1}`}
                     onSet={p => handleSetPokemon("player", i, p)}
                     onClear={() => setSlot("player", i, emptySlot())}
-                    onOpenMovePicker={() => openMovePicker("player", i)} />
+                    onOpenMovePicker={() => openMovePicker("player", i)}
+                    onAbilityChange={slug => setSlot("player", i, { selectedAbility: slug })}
+                    onItemChange={slug => setSlot("player", i, { selectedItem: slug })} />
                 ))}
               </div>
             </div>
 
-            {/* Opponent team */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-bold text-red-400">⚔️ ฝ่ายตรงข้าม</h2>
-                <button onClick={handleAutoFill} disabled={autoFilling} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors disabled:opacity-50">
+                <button type="button" onClick={handleAutoFill} disabled={autoFilling} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors disabled:opacity-50">
                   {autoFilling ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                   สุ่มทีม AI
                 </button>
@@ -530,13 +640,15 @@ export default function BattlePage() {
                   <PokemonSlot key={i} slot={opponentSlots[i]} label={`ช่อง ${i + 1}`}
                     onSet={p => handleSetPokemon("opponent", i, p)}
                     onClear={() => setSlot("opponent", i, emptySlot())}
-                    onOpenMovePicker={() => openMovePicker("opponent", i)} />
+                    onOpenMovePicker={() => openMovePicker("opponent", i)}
+                    onAbilityChange={slug => setSlot("opponent", i, { selectedAbility: slug })}
+                    onItemChange={slug => setSlot("opponent", i, { selectedItem: slug })} />
                 ))}
               </div>
             </div>
           </div>
 
-          <button onClick={startBattle} disabled={!canStart()}
+          <button type="button" onClick={startBattle} disabled={!canStart()}
             className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-bold text-base hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2">
             <Swords className="h-5 w-5" />เริ่มต่อสู้!
           </button>
@@ -548,64 +660,45 @@ export default function BattlePage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">เทิร์น {battle.turn}</span>
-            <button onClick={resetAll} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"><RefreshCw className="h-3 w-3" />เริ่มใหม่</button>
+            <button type="button" onClick={resetAll} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"><RefreshCw className="h-3 w-3" />เริ่มใหม่</button>
           </div>
 
-          {/* Battlefield */}
           <div className="rounded-2xl border border-border bg-gradient-to-b from-slate-900 to-slate-800 p-4 space-y-3">
-            {/* Opponent */}
             <div className="space-y-2">
               <p className="text-[10px] font-semibold text-red-400/70 uppercase tracking-wider">ฝ่ายตรงข้าม</p>
               <div className={cn("grid gap-3", mode === "double" ? "grid-cols-2" : "grid-cols-1 max-w-xs")}>
                 {battle.opponentActive.map((teamIdx, slot) => (
-                  <BattleCard key={slot} pokemon={battle.opponentTeam[teamIdx]} side="opponent" isActive={battle.opponentTeam[teamIdx].currentHp > 0}
-                  />
+                  <BattleCard key={slot} pokemon={battle.opponentTeam[teamIdx]} side="opponent" isActive={battle.opponentTeam[teamIdx].currentHp > 0} />
                 ))}
               </div>
             </div>
-
             <div className="border-t border-border/30 my-2" />
-
-            {/* Player */}
             <div className="space-y-2">
               <p className="text-[10px] font-semibold text-blue-400/70 uppercase tracking-wider">ทีมของคุณ</p>
               <div className={cn("grid gap-3", mode === "double" ? "grid-cols-2" : "grid-cols-1 max-w-xs ml-auto")}>
                 {battle.playerActive.map((teamIdx, slot) => (
-                  <BattleCard key={slot} pokemon={battle.playerTeam[teamIdx]} side="player" isActive={battle.playerTeam[teamIdx].currentHp > 0}
-                  />
+                  <BattleCard key={slot} pokemon={battle.playerTeam[teamIdx]} side="player" isActive={battle.playerTeam[teamIdx].currentHp > 0} />
                 ))}
               </div>
             </div>
           </div>
 
-          {/* End screen */}
           {phase === "end" && (
             <div className={cn("rounded-2xl border p-6 text-center", battle.winner === "player" ? "border-yellow-500/40 bg-yellow-950/30" : "border-red-500/40 bg-red-950/30")}>
               {battle.winner === "player" ? (
-                <>
-                  <Trophy className="h-12 w-12 text-yellow-400 mx-auto mb-2" />
-                  <p className="text-2xl font-extrabold text-yellow-400">คุณชนะ! 🎉</p>
-                  <p className="text-muted-foreground text-sm mt-1">เยี่ยมมาก! ใน {battle.turn - 1} เทิร์น</p>
-                </>
+                <><Trophy className="h-12 w-12 text-yellow-400 mx-auto mb-2" /><p className="text-2xl font-extrabold text-yellow-400">คุณชนะ! 🎉</p><p className="text-muted-foreground text-sm mt-1">เยี่ยมมาก! ใน {battle.turn - 1} เทิร์น</p></>
               ) : (
-                <>
-                  <Skull className="h-12 w-12 text-red-400 mx-auto mb-2" />
-                  <p className="text-2xl font-extrabold text-red-400">คุณแพ้...</p>
-                  <p className="text-muted-foreground text-sm mt-1">สู้ต่อไปนะ!</p>
-                </>
+                <><Skull className="h-12 w-12 text-red-400 mx-auto mb-2" /><p className="text-2xl font-extrabold text-red-400">คุณแพ้...</p><p className="text-muted-foreground text-sm mt-1">สู้ต่อไปนะ!</p></>
               )}
               <div className="flex gap-3 justify-center mt-4">
-                <button onClick={startBattle} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 flex items-center gap-1.5">
+                <button type="button" onClick={startBattle} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 flex items-center gap-1.5">
                   <RefreshCw className="h-3.5 w-3.5" />รีแมตช์
                 </button>
-                <button onClick={resetAll} className="px-4 py-2 rounded-xl border border-border text-sm hover:bg-secondary transition-colors">
-                  ตั้งทีมใหม่
-                </button>
+                <button type="button" onClick={resetAll} className="px-4 py-2 rounded-xl border border-border text-sm hover:bg-secondary transition-colors">ตั้งทีมใหม่</button>
               </div>
             </div>
           )}
 
-          {/* Action panel */}
           {phase === "battle" && (
             <div className="rounded-2xl border border-border bg-card/50 p-4 space-y-3">
               {isProcessing ? (
@@ -621,30 +714,35 @@ export default function BattlePage() {
                     </p>
                   )}
 
-                  {/* Move buttons */}
                   {pendingMoveIdx === null && (
-                    <div className="grid grid-cols-2 gap-2">
-                      {currentPlayerPokemon.moves.map((mv, i) => {
-                        const noPp = mv.currentPp <= 0;
-                        return (
-                          <button key={i} onClick={() => !noPp && handlePickMove(i)} disabled={noPp}
-                            className={cn("rounded-xl p-3 border text-left transition-colors", noPp ? "border-border/30 opacity-40 cursor-not-allowed" : "border-border/50 bg-secondary/20 hover:bg-secondary/50")}>
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <TypeTag type={mv.type} />
-                              <MoveTag category={mv.category} />
-                            </div>
-                            <p className="font-semibold text-sm">{mv.nameTh !== mv.nameEn ? mv.nameTh : mv.nameEn}</p>
-                            <div className="flex gap-2 mt-0.5 text-[10px] text-muted-foreground">
-                              <span>{mv.power ? `威力 ${mv.power}` : "—"}</span>
-                              <span>PP {mv.currentPp}/{mv.pp}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
+                    <div className="space-y-2">
+                      {currentPlayerPokemon.choiceLockedMove !== null && (
+                        <p className="text-[10px] text-yellow-400 flex items-center gap-1">🔒 Choice Item: ล็อคท่า {currentPlayerPokemon.moves[currentPlayerPokemon.choiceLockedMove]?.nameTh || "—"}</p>
+                      )}
+                      <div className="grid grid-cols-2 gap-2">
+                        {currentPlayerPokemon.moves.map((mv, i) => {
+                          const noPp = mv.currentPp <= 0;
+                          const isLocked = currentPlayerPokemon.choiceLockedMove !== null && currentPlayerPokemon.choiceLockedMove !== i;
+                          const disabled = noPp || isLocked;
+                          return (
+                            <button key={i} onClick={() => !disabled && handlePickMove(i)} disabled={disabled}
+                              className={cn("rounded-xl p-3 border text-left transition-colors", disabled ? "border-border/30 opacity-40 cursor-not-allowed" : "border-border/50 bg-secondary/20 hover:bg-secondary/50")}>
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <TypeTag type={mv.type} />
+                                <MoveTag category={mv.category} />
+                              </div>
+                              <p className="font-semibold text-sm">{mv.nameTh && mv.nameTh !== mv.nameEn ? mv.nameTh : mv.nameEn}</p>
+                              <div className="flex gap-2 mt-0.5 text-[10px] text-muted-foreground">
+                                <span>{mv.power ? `พลัง ${mv.power}` : "—"}</span>
+                                <span>PP {mv.currentPp}/{mv.pp}</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
-                  {/* Target select (double) */}
                   {mode === "double" && pendingMoveIdx !== null && (
                     <div>
                       <p className="text-xs text-muted-foreground mb-2">เลือกเป้าหมาย:</p>
@@ -669,7 +767,6 @@ export default function BattlePage() {
                     </div>
                   )}
 
-                  {/* Single battle: auto-target */}
                   {mode === "single" && pendingMoveIdx !== null && (() => { handlePickTarget(0); return null; })()}
                 </>
               ) : (
@@ -678,12 +775,10 @@ export default function BattlePage() {
             </div>
           )}
 
-          {/* Battle log */}
           <BattleLog entries={battleLog} />
         </div>
       )}
 
-      {/* Move picker modal */}
       {movePicker && pickerSlot?.pokemon && (
         <MovePickerModal
           poke={pickerSlot.pokemon}
@@ -692,6 +787,7 @@ export default function BattlePage() {
           loading={pickerSlot.loadingMoves}
           onToggle={mv => toggleMove(movePicker.side, movePicker.idx, mv)}
           onClose={() => setMovePicker(null)}
+          onAddMove={mv => addMoveToAvailable(movePicker.side, movePicker.idx, mv)}
         />
       )}
     </div>
