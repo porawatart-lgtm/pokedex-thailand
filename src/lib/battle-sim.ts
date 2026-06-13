@@ -65,6 +65,14 @@ export const BATTLE_ABILITIES: Record<string, { nameEn: string; nameTh: string; 
   "inner-focus":    { nameEn: "Inner Focus",     nameTh: "จิตใจแน่วแน่",     descTh: "ภูมิคุ้มกัน Flinch" },
   "cloud-nine":     { nameEn: "Cloud Nine",      nameTh: "เมฆเก้า",           descTh: "ยกเลิกผลของสภาพอากาศ" },
   "analytic":       { nameEn: "Analytic",        nameTh: "วิเคราะห์",          descTh: "เคลื่อนไหวทีหลัง: ดาเมจ ×1.3" },
+  "swift-swim":     { nameEn: "Swift Swim",      nameTh: "ว่ายน้ำเร็ว",         descTh: "Speed ×2 ขณะฝนตก" },
+  "shell-armor":    { nameEn: "Shell Armor",     nameTh: "เกราะเปลือก",         descTh: "ป้องกันการโจมตีคริติคอล" },
+  "filter":         { nameEn: "Filter",          nameTh: "กรอง",                descTh: "ลดดาเมจท่าที่ได้ผลดีมาก ×0.75" },
+  "prankster":      { nameEn: "Prankster",       nameTh: "ตัวหลอก",             descTh: "ท่าสถานะได้ Priority +1" },
+  "strong-jaw":     { nameEn: "Strong Jaw",      nameTh: "กรามเหล็ก",           descTh: "ท่ากัด ×1.5 พลังโจมตี" },
+  "solar-power":    { nameEn: "Solar Power",     nameTh: "พลังแสงอาทิตย์",      descTh: "SpAtk ×1.5 ขณะแดดออก แต่เสีย HP ทุกเทิร์น" },
+  "snow-warning":   { nameEn: "Snow Warning",    nameTh: "เตือนหิมะ",            descTh: "เรียกพายุหิมะเมื่อออกมา" },
+  "healer":         { nameEn: "Healer",          nameTh: "นักรักษา",             descTh: "30% โอกาสรักษาสถานะของพันธมิตร" },
 };
 
 // ─── Item data ────────────────────────────────────────────────────────────────
@@ -181,6 +189,31 @@ export const MEGA_STONE_ITEMS: Record<string, { nameTh: string; megaSlug: string
   "metagrossite":     { nameTh: "หินเมตากรอสไซต์",    megaSlug: "metagross-mega" },
   "rayquazite":       { nameTh: "หินเรควาซ่าไรต์",     megaSlug: "rayquaza-mega" },
   "lopunnite":        { nameTh: "หินโลปันนีไนต์",      megaSlug: "lopunny-mega" },
+  // XY megas (missing)
+  "houndoominite":    { nameTh: "หินเฮาน์ดูมไนต์",     megaSlug: "houndoom-mega" },
+  "mawilite":         { nameTh: "หินมาวิลไลต์",         megaSlug: "mawile-mega" },
+  "aggronite":        { nameTh: "หินแอกกรอนไนต์",       megaSlug: "aggron-mega" },
+  "medichamite":      { nameTh: "หินเมดิแชมไรต์",       megaSlug: "medicham-mega" },
+  "manectite":        { nameTh: "หินมาเนคไทต์",         megaSlug: "manectric-mega" },
+  "banettite":        { nameTh: "หินบาเนตไทต์",         megaSlug: "banette-mega" },
+  "glalitite":        { nameTh: "หินกลาลีไทต์",         megaSlug: "glalie-mega" },
+  "abomasite":        { nameTh: "หินอาโบมาไซต์",        megaSlug: "abomasnow-mega" },
+  // ORAS megas
+  "beedrillite":      { nameTh: "หินบีดริลไลต์",        megaSlug: "beedrill-mega" },
+  "pidgeotite":       { nameTh: "หินพิดจิออตไรต์",      megaSlug: "pidgeot-mega" },
+  "slowbronite":      { nameTh: "หินสโลว์โบรไนต์",      megaSlug: "slowbro-mega" },
+  "steelixite":       { nameTh: "หินสตีลิกซ์ไรต์",      megaSlug: "steelix-mega" },
+  "sceptilite":       { nameTh: "หินเซปไทลไรต์",        megaSlug: "sceptile-mega" },
+  "swampertite":      { nameTh: "หินสวอมเพิร์ทไรต์",    megaSlug: "swampert-mega" },
+  "sablenite":        { nameTh: "หินเซบลีไนต์",         megaSlug: "sableye-mega" },
+  "sharpedonite":     { nameTh: "หินชาร์พีโดไนต์",      megaSlug: "sharpedo-mega" },
+  "cameruptite":      { nameTh: "หินแคเมรัปไทต์",       megaSlug: "camerupt-mega" },
+  "altarianite":      { nameTh: "หินอัลทาเรียไนต์",     megaSlug: "altaria-mega" },
+  "latiasite":        { nameTh: "หินลาติอัสไรต์",        megaSlug: "latias-mega" },
+  "latiosite":        { nameTh: "หินลาติออสไรต์",        megaSlug: "latios-mega" },
+  "galladite":        { nameTh: "หินกัลเลดไรต์",        megaSlug: "gallade-mega" },
+  "diancite":         { nameTh: "หินไดแอนไซต์",         megaSlug: "diancie-mega" },
+  "audinite":         { nameTh: "หินออดิโนไรต์",         megaSlug: "audino-mega" },
 };
 
 export const MEGA_DATA: Record<string, MegaFormData> = {
@@ -209,6 +242,31 @@ export const MEGA_DATA: Record<string, MegaFormData> = {
   "metagross-mega":    { nameEn: "Mega Metagross",  nameTh: "เมก้า เมตากรอส",     types: ["steel","psychic"],  ability: "tough-claws",    spriteId: 10088, atk: 145, def: 150, spAtk: 105, spDef: 110, speed: 110 },
   "rayquaza-mega":     { nameEn: "Mega Rayquaza",   nameTh: "เมก้า เรควาซ่า",      types: ["dragon","flying"],  ability: "delta-stream",   spriteId: 10090, atk: 180, def: 100, spAtk: 180, spDef: 100, speed: 115 },
   "lopunny-mega":      { nameEn: "Mega Lopunny",    nameTh: "เมก้า โลปันนี",        types: ["normal","fighting"],ability: "scrappy",        spriteId: 10073, atk: 136, def: 94,  spAtk: 54,  spDef: 96,  speed: 135 },
+  // XY megas (missing)
+  "houndoom-mega":    { nameEn: "Mega Houndoom",   nameTh: "เมก้า เฮาน์ดูม",      types: ["fire","dark"],      ability: "solar-power",    spriteId: 10048, atk: 90,  def: 52,  spAtk: 140, spDef: 95,  speed: 115 },
+  "mawile-mega":      { nameEn: "Mega Mawile",     nameTh: "เมก้า มาวิล",          types: ["steel","fairy"],    ability: "huge-power",     spriteId: 10052, atk: 105, def: 125, spAtk: 55,  spDef: 95,  speed: 50 },
+  "aggron-mega":      { nameEn: "Mega Aggron",     nameTh: "เมก้า แอกกรอน",       types: ["steel"],            ability: "filter",         spriteId: 10053, atk: 140, def: 230, spAtk: 60,  spDef: 80,  speed: 50 },
+  "medicham-mega":    { nameEn: "Mega Medicham",   nameTh: "เมก้า เมดิแชม",        types: ["fighting","psychic"],ability:"pure-power",     spriteId: 10054, atk: 100, def: 85,  spAtk: 80,  spDef: 85,  speed: 100 },
+  "manectric-mega":   { nameEn: "Mega Manectric",  nameTh: "เมก้า มาเนคทริค",     types: ["electric"],         ability: "intimidate",     spriteId: 10055, atk: 75,  def: 80,  spAtk: 135, spDef: 80,  speed: 135 },
+  "banette-mega":     { nameEn: "Mega Banette",    nameTh: "เมก้า บาเนต",          types: ["ghost"],            ability: "prankster",      spriteId: 10056, atk: 165, def: 75,  spAtk: 93,  spDef: 83,  speed: 75 },
+  "glalie-mega":      { nameEn: "Mega Glalie",     nameTh: "เมก้า กลาลี",          types: ["ice"],              ability: "refrigerate",    spriteId: 10071, atk: 120, def: 80,  spAtk: 120, spDef: 80,  speed: 100 },
+  "abomasnow-mega":   { nameEn: "Mega Abomasnow",  nameTh: "เมก้า อาโบมาสโนว์",   types: ["grass","ice"],      ability: "snow-warning",   spriteId: 10060, atk: 132, def: 105, spAtk: 132, spDef: 105, speed: 30 },
+  // ORAS megas
+  "beedrill-mega":    { nameEn: "Mega Beedrill",   nameTh: "เมก้า บีดริล",         types: ["bug","poison"],     ability: "adaptability",   spriteId: 10067, atk: 150, def: 40,  spAtk: 15,  spDef: 80,  speed: 145 },
+  "pidgeot-mega":     { nameEn: "Mega Pidgeot",    nameTh: "เมก้า พิดจิออต",       types: ["normal","flying"],  ability: "no-guard",       spriteId: 10069, atk: 80,  def: 80,  spAtk: 135, spDef: 80,  speed: 121 },
+  "slowbro-mega":     { nameEn: "Mega Slowbro",    nameTh: "เมก้า สโลว์โบร",       types: ["water","psychic"],  ability: "shell-armor",    spriteId: 10070, atk: 75,  def: 180, spAtk: 130, spDef: 80,  speed: 30 },
+  "steelix-mega":     { nameEn: "Mega Steelix",    nameTh: "เมก้า สตีลิกซ์",       types: ["steel","ground"],   ability: "sand-force",     spriteId: 10064, atk: 125, def: 230, spAtk: 55,  spDef: 65,  speed: 30 },
+  "sceptile-mega":    { nameEn: "Mega Sceptile",   nameTh: "เมก้า เซปไทล์",        types: ["grass","dragon"],   ability: "lightning-rod",  spriteId: 10065, atk: 110, def: 75,  spAtk: 145, spDef: 85,  speed: 145 },
+  "swampert-mega":    { nameEn: "Mega Swampert",   nameTh: "เมก้า สวอมเพิร์ท",    types: ["water","ground"],   ability: "swift-swim",     spriteId: 10066, atk: 150, def: 110, spAtk: 95,  spDef: 110, speed: 70 },
+  "sableye-mega":     { nameEn: "Mega Sableye",    nameTh: "เมก้า เซบลี",          types: ["dark","ghost"],     ability: "magic-bounce",   spriteId: 10063, atk: 85,  def: 125, spAtk: 80,  spDef: 115, speed: 20 },
+  "sharpedo-mega":    { nameEn: "Mega Sharpedo",   nameTh: "เมก้า ชาร์พีโด",      types: ["water","dark"],     ability: "strong-jaw",     spriteId: 10068, atk: 140, def: 70,  spAtk: 110, spDef: 65,  speed: 105 },
+  "camerupt-mega":    { nameEn: "Mega Camerupt",   nameTh: "เมก้า แคเมรัปท์",     types: ["fire","ground"],    ability: "sheer-force",    spriteId: 10061, atk: 120, def: 100, spAtk: 145, spDef: 105, speed: 20 },
+  "altaria-mega":     { nameEn: "Mega Altaria",    nameTh: "เมก้า อัลทาเรีย",     types: ["dragon","fairy"],   ability: "pixilate",       spriteId: 10062, atk: 110, def: 110, spAtk: 110, spDef: 105, speed: 80 },
+  "latias-mega":      { nameEn: "Mega Latias",     nameTh: "เมก้า ลาติอัส",        types: ["dragon","psychic"], ability: "levitate",       spriteId: 10074, atk: 100, def: 120, spAtk: 140, spDef: 150, speed: 110 },
+  "latios-mega":      { nameEn: "Mega Latios",     nameTh: "เมก้า ลาติออส",        types: ["dragon","psychic"], ability: "levitate",       spriteId: 10075, atk: 130, def: 100, spAtk: 160, spDef: 120, speed: 110 },
+  "gallade-mega":     { nameEn: "Mega Gallade",    nameTh: "เมก้า กัลเลด",         types: ["psychic","fighting"],ability:"inner-focus",    spriteId: 10076, atk: 165, def: 95,  spAtk: 65,  spDef: 115, speed: 110 },
+  "diancie-mega":     { nameEn: "Mega Diancie",    nameTh: "เมก้า ไดแอนซี",        types: ["rock","fairy"],     ability: "magic-bounce",   spriteId: 10077, atk: 160, def: 110, spAtk: 160, spDef: 110, speed: 110 },
+  "audino-mega":      { nameEn: "Mega Audino",     nameTh: "เมก้า ออดิโน",         types: ["normal","fairy"],   ability: "healer",         spriteId: 10078, atk: 60,  def: 126, spAtk: 80,  spDef: 126, speed: 50 },
 };
 
 // ─── Z-Crystal data ───────────────────────────────────────────────────────────
