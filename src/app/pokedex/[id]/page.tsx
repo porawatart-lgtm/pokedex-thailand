@@ -14,6 +14,8 @@ import type { PokemonDetail, PokemonTypeName } from "@/types/pokemon";
 import { cn } from "@/lib/utils";
 import { fetchPokemon, fetchPokemonSpecies, fetchEvolutionChain, flattenEvolutionChain, getArtworkUrl, parseGenerationFromUrl, parseIdFromUrl, formatPokemonName } from "@/lib/pokeapi";
 import { MovesTable } from "@/components/pokemon/moves-table";
+import { ItemSprite } from "@/components/pokemon/item-sprite";
+import { getItemRecommendations, getItemSpriteUrls } from "@/lib/item-recommendations";
 import { db } from "@/lib/db";
 
 async function getPokemonDetail(id: string): Promise<PokemonDetail | null> {
@@ -172,6 +174,8 @@ export default async function PokemonDetailPage({
 
   const prevId = pokemon.dexNumber > 1 ? pokemon.dexNumber - 1 : null;
   const nextId = pokemon.dexNumber < 1025 ? pokemon.dexNumber + 1 : null;
+
+  const itemRecs = getItemRecommendations(pokemon.slug);
 
   // Get the latest flavor text in English
   const flavorText = pokemon.flavorTexts.find((f) => f.language === "en");
@@ -405,6 +409,28 @@ export default async function PokemonDetailPage({
                 ))}
               </div>
             </SectionCard>
+
+            {/* Recommended Held Items */}
+            {itemRecs.length > 0 && (
+              <SectionCard title="ไอเทมที่แนะนำ">
+                <div className="space-y-4">
+                  {itemRecs.map((rec) => (
+                    <div key={rec.item} className="flex items-start gap-3">
+                      <div className="shrink-0 rounded-lg border border-border bg-secondary/40 p-1">
+                        <ItemSprite urls={getItemSpriteUrls(rec.item)} alt={rec.def.nameEn} size={36} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-sm">{rec.def.nameTh}</span>
+                          <span className="text-xs text-muted-foreground">{rec.def.nameEn}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{rec.reason}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+            )}
           </div>
 
           {/* Right Column */}
