@@ -46,7 +46,7 @@ function EffectivenessCell({ value }: { value: number }) {
   if (value === 4)
     return (
       <td className="text-center p-0.5">
-        <span className="flex items-center justify-center w-7 h-7 rounded text-xs font-bold bg-red-900/50 text-red-300">
+        <span className="flex items-center justify-center w-7 h-7 rounded text-xs font-bold bg-red-600 text-white ring-1 ring-red-400 shadow-sm shadow-red-900">
           4
         </span>
       </td>

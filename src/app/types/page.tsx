@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { AlertTriangle } from "lucide-react";
 import { cn, getTypeColor } from "@/lib/utils";
 import {
   TYPE_CHART, ALL_TYPES, TYPE_NAMES_TH, TYPE_COLORS,
@@ -17,7 +18,7 @@ function EffCell({ value, small = false }: { value: number; small?: boolean }) {
   if (value === 0.25) return <span className={cn(s, "flex items-center justify-center rounded font-bold bg-blue-900/60 text-blue-300")}>¼</span>;
   if (value === 0.5)  return <span className={cn(s, "flex items-center justify-center rounded font-bold bg-blue-700/30 text-blue-400")}>½</span>;
   if (value === 2)    return <span className={cn(s, "flex items-center justify-center rounded font-bold bg-orange-800/50 text-orange-300")}>2</span>;
-  if (value === 4)    return <span className={cn(s, "flex items-center justify-center rounded font-bold bg-red-800/60 text-red-300")}>4</span>;
+  if (value === 4)    return <span className={cn(s, "flex items-center justify-center rounded font-bold bg-red-600 text-white ring-1 ring-red-400 shadow-sm shadow-red-900")}>4</span>;
   return <span className={cn(s, "flex items-center justify-center rounded text-muted-foreground/25")}>—</span>;
 }
 
@@ -190,17 +191,34 @@ function DualTypeCalc() {
       )}
 
       {groups && (
-        <div className="grid sm:grid-cols-2 gap-4">
-          {Object.entries(groups).map(([label, types]) =>
-            types.length > 0 ? (
-              <div key={label}>
-                <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">{label}</p>
-                <div className="flex flex-wrap gap-1">
-                  {types.map((t) => <TypePill key={t} type={t} />)}
-                </div>
+        <div className="space-y-3">
+          {/* 4x weakness — highlighted block */}
+          {groups["4× (อ่อนแอมาก)"].length > 0 && (
+            <div className="rounded-xl border border-red-500/40 bg-red-950/40 p-3">
+              <p className="flex items-center gap-1.5 text-[11px] font-bold text-red-400 mb-2">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                4× อ่อนแอมาก — ธาตุที่แพ้สูงสุด
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {groups["4× (อ่อนแอมาก)"].map((t) => <TypePill key={t} type={t} />)}
               </div>
-            ) : null
+            </div>
           )}
+          {/* Remaining groups */}
+          <div className="grid sm:grid-cols-2 gap-4">
+            {Object.entries(groups)
+              .filter(([label]) => label !== "4× (อ่อนแอมาก)")
+              .map(([label, types]) =>
+                types.length > 0 ? (
+                  <div key={label}>
+                    <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">{label}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {types.map((t) => <TypePill key={t} type={t} />)}
+                    </div>
+                  </div>
+                ) : null
+              )}
+          </div>
         </div>
       )}
 
@@ -234,7 +252,7 @@ export default function TypeChartPage() {
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-6 text-xs text-muted-foreground">
         <span className="font-semibold text-foreground">ตำนาน:</span>
         {[
-          { label: "4× ได้ผลดีมาก",   cls: "bg-red-800/60 text-red-300" },
+          { label: "4× ได้ผลดีมาก",   cls: "bg-red-600 text-white ring-1 ring-red-400" },
           { label: "2× ได้ผลดี",       cls: "bg-orange-800/50 text-orange-300" },
           { label: "½× ได้ผลน้อย",    cls: "bg-blue-700/30 text-blue-400" },
           { label: "¼× ได้ผลน้อยมาก", cls: "bg-blue-900/60 text-blue-300" },
