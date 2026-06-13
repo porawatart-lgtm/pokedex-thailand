@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Menu, X, ChevronDown, Sword, Book, Package,
-  Users, Trophy, Zap, Bot, Star, Sparkles, Gamepad2,
+  Users, Trophy, Zap, Bot, Star, Sparkles, Gamepad2, Swords,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GAMES, GEN_INFO, PLATFORM_GAMES } from "@/lib/games-data";
@@ -70,8 +70,13 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Tier List & Usage", labelTh: "Tier List & Usage", href: "/competitive", descriptionTh: "Smogon Stats อัปเดตรายเดือน", icon: Trophy },
       { label: "Team Builder", labelTh: "สร้างทีม", href: "/team-builder", descriptionTh: "สร้างและวิเคราะห์ทีม", icon: Users },
       { label: "Damage Calculator", labelTh: "คำนวณดาเมจ", href: "/calc", descriptionTh: "คำนวณดาเมจอย่างละเอียด", icon: Sword },
-      { label: "Battle Simulator", labelTh: "จำลองการต่อสู้", href: "/battle", descriptionTh: "จำลองการต่อสู้", icon: Zap },
     ],
+  },
+  {
+    label: "Battle",
+    labelTh: "⚔️ ต่อสู้",
+    href: "/battle",
+    icon: Swords,
   },
   {
     label: "AI Features",
