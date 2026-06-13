@@ -66,6 +66,20 @@ function TypeDetail({ type }: { type: PokemonTypeName }) {
   const resistTo = defense.filter((t) => t.val === 0.5);
   const immuneTo = defense.filter((t) => t.val === 0);
 
+  // 4x weaknesses when paired with another type — grouped by which attacker causes 4x
+  const quadByAttacker: Record<string, PokemonTypeName[]> = {};
+  ALL_TYPES.forEach((paired) => {
+    if (paired === type) return;
+    const defs = getDualTypeDefenses([type, paired]);
+    ALL_TYPES.forEach((atk) => {
+      if (defs[atk] === 4) {
+        if (!quadByAttacker[atk]) quadByAttacker[atk] = [];
+        quadByAttacker[atk].push(paired);
+      }
+    });
+  });
+  const quadEntries = Object.entries(quadByAttacker) as [PokemonTypeName, PokemonTypeName[]][];
+
   return (
     <motion.div
       key={type}
@@ -109,6 +123,27 @@ function TypeDetail({ type }: { type: PokemonTypeName }) {
           </div>
         </div>
       </div>
+
+      {/* 4x dual-type weaknesses */}
+      {quadEntries.length > 0 && (
+        <div className="mt-5 rounded-xl border border-red-500/30 bg-red-950/30 p-3">
+          <p className="flex items-center gap-1.5 text-[11px] font-bold text-red-400 mb-2.5">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            แพ้ 4× เมื่อจับคู่กับธาตุอื่น
+          </p>
+          <div className="space-y-2">
+            {quadEntries.map(([atk, pairedTypes]) => (
+              <div key={atk} className="flex items-start gap-2 text-[11px]">
+                <TypePill type={atk as PokemonTypeName} />
+                <span className="text-muted-foreground mt-0.5">4× ← จับคู่กับ</span>
+                <div className="flex flex-wrap gap-1">
+                  {pairedTypes.map((t) => <TypePill key={t} type={t} />)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
