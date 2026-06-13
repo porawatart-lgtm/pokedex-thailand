@@ -214,6 +214,8 @@ export const MEGA_STONE_ITEMS: Record<string, { nameTh: string; megaSlug: string
   "galladite":        { nameTh: "หินกัลเลดไรต์",        megaSlug: "gallade-mega" },
   "diancite":         { nameTh: "หินไดแอนไซต์",         megaSlug: "diancie-mega" },
   "audinite":         { nameTh: "หินออดิโนไรต์",         megaSlug: "audino-mega" },
+  // Legends Z-A megas
+  "greninjite":       { nameTh: "หินเกรนินจาไรต์",       megaSlug: "greninja-mega" },
 };
 
 export const MEGA_DATA: Record<string, MegaFormData> = {
@@ -267,6 +269,8 @@ export const MEGA_DATA: Record<string, MegaFormData> = {
   "gallade-mega":     { nameEn: "Mega Gallade",    nameTh: "เมก้า กัลเลด",         types: ["psychic","fighting"],ability:"inner-focus",    spriteId: 10076, atk: 165, def: 95,  spAtk: 65,  spDef: 115, speed: 110 },
   "diancie-mega":     { nameEn: "Mega Diancie",    nameTh: "เมก้า ไดแอนซี",        types: ["rock","fairy"],     ability: "magic-bounce",   spriteId: 10077, atk: 160, def: 110, spAtk: 160, spDef: 110, speed: 110 },
   "audino-mega":      { nameEn: "Mega Audino",     nameTh: "เมก้า ออดิโน",         types: ["normal","fairy"],   ability: "healer",         spriteId: 10078, atk: 60,  def: 126, spAtk: 80,  spDef: 126, speed: 50 },
+  // Legends Z-A megas
+  "greninja-mega":    { nameEn: "Mega Greninja",   nameTh: "เมก้า เกรนินจา",       types: ["water","dark"],     ability: "protean",        spriteId: 10200, atk: 125, def: 77,  spAtk: 133, spDef: 81,  speed: 142 },
 };
 
 // ─── Z-Crystal data ───────────────────────────────────────────────────────────
