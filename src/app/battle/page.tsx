@@ -211,6 +211,7 @@ function PokemonSlot({ slot, label, onSet, onClear, onOpenMovePicker, onAbilityC
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [itemTab, setItemTab] = useState<"items"|"berries"|"mega"|"z">("items");
+  const [megaSearch, setMegaSearch] = useState("");
 
   const search = async () => {
     if (!query.trim()) return;
@@ -344,37 +345,70 @@ function PokemonSlot({ slot, label, onSet, onClear, onOpenMovePicker, onAbilityC
             </div>
           )}
 
-          {/* Tab: Mega Stones — filtered to this Pokemon */}
+          {/* Tab: Mega Stones */}
           {itemTab === "mega" && (() => {
             const baseSlug = p.slug.split("-")[0];
-            const relevant = Object.entries(MEGA_STONE_ITEMS).filter(([, s]) => s.megaSlug.startsWith(baseSlug));
-            const rest = Object.entries(MEGA_STONE_ITEMS).filter(([, s]) => !s.megaSlug.startsWith(baseSlug));
+            const searchQ = megaSearch.toLowerCase();
+            const allStones = Object.entries(MEGA_STONE_ITEMS);
+            // Pokémon name from megaSlug (e.g. "venusaur-mega" → "Venusaur")
+            const pokeFromMega = (megaSlug: string) =>
+              megaSlug.replace(/-mega.*$/, "").split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+
+            const relevant = allStones.filter(([, s]) => s.megaSlug.startsWith(baseSlug));
+            const filteredRest = allStones
+              .filter(([, s]) => !s.megaSlug.startsWith(baseSlug))
+              .filter(([slug, s]) =>
+                !searchQ || s.nameTh.includes(megaSearch) || slug.includes(searchQ) || pokeFromMega(s.megaSlug).toLowerCase().includes(searchQ)
+              );
+
             return (
-              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+              <div className="space-y-1.5">
+                {/* Relevant stones for this Pokemon */}
                 {relevant.length > 0 && (
                   <div>
-                    <p className="text-[9px] text-purple-400/70 mb-0.5">⭐ สำหรับ {p.nameTh ?? p.nameEn}</p>
+                    <p className="text-[9px] text-purple-400/70 mb-1">⭐ หินเมก้าสำหรับ {p.nameTh ?? p.nameEn}</p>
                     <div className="flex flex-wrap gap-1">
                       {relevant.map(([slug, stone]) => (
                         <button key={slug} type="button" onClick={() => onItemChange(slug === slot.selectedItem ? null : slug)}
-                          className={cn("text-[9px] px-2 py-0.5 rounded-full border transition-colors whitespace-nowrap",
-                            slot.selectedItem === slug ? "border-purple-400 bg-purple-950/40 text-purple-200 font-semibold" : "border-purple-700/50 text-purple-400 hover:border-purple-400")}>
+                          className={cn("text-[9px] px-2 py-1 rounded-full border transition-colors",
+                            slot.selectedItem === slug
+                              ? "border-purple-400 bg-purple-900/50 text-purple-200 font-bold"
+                              : "border-purple-500/60 text-purple-300 hover:border-purple-400 hover:bg-purple-950/30")}>
                           {stone.nameTh}
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
-                <div>
-                  <p className="text-[9px] text-muted-foreground/60 mb-0.5">หินเมก้าทั้งหมด</p>
+
+                {/* Search box */}
+                <div className="relative">
+                  <input
+                    value={megaSearch}
+                    onChange={e => setMegaSearch(e.target.value)}
+                    placeholder="ค้นหาหินเมก้า..."
+                    className="w-full text-[10px] bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-purple-500/60 placeholder:text-muted-foreground/50"
+                  />
+                </div>
+
+                {/* All other stones */}
+                <div className="max-h-32 overflow-y-auto pr-1">
+                  <p className="text-[9px] text-muted-foreground/50 mb-1">หินเมก้าทั้งหมด ({filteredRest.length})</p>
                   <div className="flex flex-wrap gap-1">
-                    {rest.map(([slug, stone]) => (
-                      <button key={slug} type="button" onClick={() => onItemChange(slug === slot.selectedItem ? null : slug)}
-                        className={cn("text-[9px] px-2 py-0.5 rounded-full border transition-colors whitespace-nowrap",
-                          slot.selectedItem === slug ? "border-purple-400 bg-purple-950/40 text-purple-200 font-semibold" : "border-border/60 text-muted-foreground hover:text-foreground hover:border-purple-700/50")}>
-                        {stone.nameTh}
-                      </button>
-                    ))}
+                    {filteredRest.map(([slug, stone]) => {
+                      const pokeName = pokeFromMega(stone.megaSlug);
+                      return (
+                        <button key={slug} type="button"
+                          onClick={() => onItemChange(slug === slot.selectedItem ? null : slug)}
+                          title={`สำหรับ ${pokeName}`}
+                          className={cn("text-[9px] px-2 py-0.5 rounded-full border transition-colors",
+                            slot.selectedItem === slug
+                              ? "border-purple-400 bg-purple-950/40 text-purple-200 font-semibold"
+                              : "border-border/60 text-muted-foreground hover:text-purple-300 hover:border-purple-700/50")}>
+                          {stone.nameTh}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
