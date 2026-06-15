@@ -118,6 +118,8 @@ export interface PokemonCries {
 
 export interface EvolutionChain {
   fromId: number;
+  fromSlug: string;
+  fromName: string;
   toId: number;
   toSlug: string;
   toName: string;
@@ -126,6 +128,10 @@ export interface EvolutionChain {
   trigger: string;
   minLevel: number | null;
   itemName: string | null;
+  heldItemName: string | null;
+  knownMove: string | null;
+  minHappiness: number | null;
+  location: string | null;
   condition: string | null;
 }
 

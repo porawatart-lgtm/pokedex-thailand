@@ -1,6 +1,8 @@
 import { getDualTypeDefenses, TYPE_CHART } from "./type-chart";
 import type { PokemonTypeName } from "@/types/pokemon";
 
+export type WeatherName = "none" | "rain" | "sun" | "sand" | "hail";
+
 // ─── Ability data ─────────────────────────────────────────────────────────────
 
 export const BATTLE_ABILITIES: Record<string, { nameEn: string; nameTh: string; descTh: string }> = {
@@ -481,8 +483,12 @@ export interface SimPokemon {
   megaFormSlug: string | null;
   // Dynamax / G-Max
   dynamaxTurnsLeft: number;
-  baseMaxHp: number;   // stores original maxHp before Dynamax
+  baseMaxHp: number;
   dynamaxUsed: boolean;
+  // Terastallization
+  teraType: PokemonTypeName;
+  teraActive: boolean;
+  origTypes: PokemonTypeName[];
 }
 
 export interface BattleLogEntry {
@@ -495,14 +501,17 @@ export interface BattleState {
   playerActive: number[]; opponentActive: number[];
   turn: number; logSeed: number; winner: "player" | "opponent" | null;
   playerMegaUsed: boolean; opponentMegaUsed: boolean;
+  playerTeraUsed: boolean; opponentTeraUsed: boolean;
+  weather: WeatherName; weatherTurns: number;
 }
 
 export interface PlayerAction {
   activeSlot: number; moveIndex: number; targetSlot: number;
-  switchTo?: number;   // team index to switch in (moveIndex == -1)
+  switchTo?: number;
   useMega?: boolean;
   useZMove?: boolean;
   useDynamax?: boolean;
+  useTera?: boolean;
 }
 
 export interface TurnResult { state: BattleState; log: BattleLogEntry[] }
@@ -532,11 +541,12 @@ export function buildSimPokemon(p: {
   types: PokemonTypeName[];
   baseStats: { hp: number; attack: number; defense: number; specialAttack: number; specialDefense: number; speed: number };
   moves: SimMove[]; ability?: string; heldItem?: string | null;
+  teraType?: PokemonTypeName;
 }): SimPokemon {
   const maxHp = simCalcHp(p.baseStats.hp);
   return {
     uid: p.uid, id: p.id, slug: p.slug, nameEn: p.nameEn, nameTh: p.nameTh,
-    types: p.types, level: 50,
+    types: [...p.types], level: 50,
     maxHp, currentHp: maxHp,
     atk: simCalcStat(p.baseStats.attack), def: simCalcStat(p.baseStats.defense),
     spAtk: simCalcStat(p.baseStats.specialAttack), spDef: simCalcStat(p.baseStats.specialDefense),
@@ -551,6 +561,9 @@ export function buildSimPokemon(p: {
     weaknessPolicyUsed: false, airBalloonPopped: false,
     megaEvolved: false, megaFormSlug: null,
     dynamaxTurnsLeft: 0, baseMaxHp: 0, dynamaxUsed: false,
+    teraType: p.teraType ?? p.types[0] ?? "normal",
+    teraActive: false,
+    origTypes: [...p.types],
   };
 }
 
@@ -597,6 +610,7 @@ function applyEntry(
   pt: SimPokemon[], ot: SimPokemon[],
   playerActive: number[], opponentActive: number[],
   add: (text: string, kind?: BattleLogEntry["kind"]) => void,
+  setWeather?: (w: WeatherName, turns: number) => void,
 ) {
   const oppTeam = incomingSide === "p" ? ot : pt;
   const oppActive = incomingSide === "p" ? opponentActive : playerActive;
@@ -617,9 +631,22 @@ function applyEntry(
       else { incoming.stages.spAtk = Math.min(6, incoming.stages.spAtk + 1); add(`💻 Download ของ ${name} เพิ่ม SpAtk!`, "status"); }
     }
   }
-  if (incoming.ability === "drought") add(`☀️ ${name} เรียกแสงแดดแผดเผา!`, "status");
-  if (incoming.ability === "drizzle") add(`🌧️ ${name} เรียกฝนโปรย!`, "status");
-  if (incoming.ability === "sand-stream") add(`🌪️ ${name} เรียกพายุทราย!`, "status");
+  if (incoming.ability === "drought") {
+    setWeather?.("sun", 5);
+    add(`☀️ ${name} เรียกแสงแดดแผดเผา! (5 เทิร์น)`, "status");
+  }
+  if (incoming.ability === "drizzle") {
+    setWeather?.("rain", 5);
+    add(`🌧️ ${name} เรียกฝนโปรย! (5 เทิร์น)`, "status");
+  }
+  if (incoming.ability === "sand-stream") {
+    setWeather?.("sand", 5);
+    add(`🌪️ ${name} เรียกพายุทราย! (5 เทิร์น)`, "status");
+  }
+  if (incoming.ability === "snow-warning") {
+    setWeather?.("hail", 5);
+    add(`🌨️ ${name} เรียกพายุหิมะ! (5 เทิร์น)`, "status");
+  }
 }
 
 export function applyTeamEntryEffects(state: BattleState): TurnResult {
@@ -627,10 +654,13 @@ export function applyTeamEntryEffects(state: BattleState): TurnResult {
   const ot = JSON.parse(JSON.stringify(state.opponentTeam)) as SimPokemon[];
   const log: BattleLogEntry[] = [];
   let lid = state.logSeed;
+  let weather = state.weather;
+  let weatherTurns = state.weatherTurns;
   const add = (text: string, kind: BattleLogEntry["kind"] = "info") => log.push({ id: lid++, text, kind });
-  for (const pi of state.playerActive) { const p = pt[pi]; if (p) applyEntry(p, "p", pt, ot, state.playerActive, state.opponentActive, add); }
-  for (const oi of state.opponentActive) { const o = ot[oi]; if (o) applyEntry(o, "o", pt, ot, state.playerActive, state.opponentActive, add); }
-  return { state: { ...state, playerTeam: pt, opponentTeam: ot, logSeed: lid }, log };
+  const setWeather = (w: WeatherName, turns: number) => { weather = w; weatherTurns = turns; };
+  for (const pi of state.playerActive) { const p = pt[pi]; if (p) applyEntry(p, "p", pt, ot, state.playerActive, state.opponentActive, add, setWeather); }
+  for (const oi of state.opponentActive) { const o = ot[oi]; if (o) applyEntry(o, "o", pt, ot, state.playerActive, state.opponentActive, add, setWeather); }
+  return { state: { ...state, playerTeam: pt, opponentTeam: ot, logSeed: lid, weather, weatherTurns }, log };
 }
 
 // ─── Damage Roll ──────────────────────────────────────────────────────────────
@@ -643,7 +673,7 @@ interface DmgResult {
   messages: string[]; weaknessPolicyTriggered: boolean;
 }
 
-function rollDamage(attacker: SimPokemon, defender: SimPokemon, move: SimMove, opts?: { ignoreAcc?: boolean }): DmgResult {
+function rollDamage(attacker: SimPokemon, defender: SimPokemon, move: SimMove, opts?: { ignoreAcc?: boolean; weather?: WeatherName }): DmgResult {
   if (move.category === "status" || !move.power)
     return { damage: 0, effectiveness: 1, isCrit: false, missed: false, messages: [], weaknessPolicyTriggered: false };
 
@@ -748,15 +778,17 @@ function rollDamage(attacker: SimPokemon, defender: SimPokemon, move: SimMove, o
     if (defender.ability === "dry-skin" && moveType === "fire") effMult *= 1.25;
     if (defender.ability === "delta-stream" && moveType !== "rock" && moveType !== "electric" && moveType !== "ice" && defender.types.includes("flying")) effMult = Math.min(effMult, 1);
   }
-  // Drought/Drizzle weather effects
-  if (attacker.ability === "drought" || defender.ability === "drought") {
-    if (moveType === "fire") effMult *= 1.5;
-    if (moveType === "water") effMult *= 0.5;
-  }
-  if (attacker.ability === "drizzle" || defender.ability === "drizzle") {
+  // Weather effects on damage
+  const weather = opts?.weather ?? "none";
+  if (weather === "rain") {
     if (moveType === "water") effMult *= 1.5;
-    if (moveType === "fire") effMult *= 0.5;
+    else if (moveType === "fire") effMult *= 0.5;
+  } else if (weather === "sun") {
+    if (moveType === "fire") effMult *= 1.5;
+    else if (moveType === "water") effMult *= 0.5;
   }
+  // Sand Force boosts Rock/Ground/Steel in sand
+  if (weather === "sand" && attacker.ability === "sand-force" && (moveType === "rock" || moveType === "ground" || moveType === "steel")) effMult *= 1.3;
   dmg = Math.floor(dmg * effMult);
 
   if (eff >= 4) msgs.push("ได้ผลอย่างมหาศาล!! ×4");
@@ -781,8 +813,7 @@ function rollDamage(attacker: SimPokemon, defender: SimPokemon, move: SimMove, o
   if (attacker.ability === "iron-fist" && PUNCH_MOVES.has(move.slug)) dmg = Math.floor(dmg * 1.2);
   if (attacker.ability === "tough-claws" && isPhys) dmg = Math.floor(dmg * 1.33);
   if (attacker.ability === "mega-launcher" && PULSE_MOVES.has(move.slug)) dmg = Math.floor(dmg * 1.5);
-  if (attacker.ability === "sand-force" && (moveType === "rock" || moveType === "ground" || moveType === "steel")) dmg = Math.floor(dmg * 1.3);
-  if (attacker.ability === "analytic") dmg = Math.floor(dmg * 1.3); // simplified: always active
+  if (attacker.ability === "analytic") dmg = Math.floor(dmg * 1.3);
 
   // Item boosts
   const atkItem = attacker.heldItem;
@@ -822,27 +853,25 @@ function rollDamage(attacker: SimPokemon, defender: SimPokemon, move: SimMove, o
 
 // ─── AI ───────────────────────────────────────────────────────────────────────
 
-export function aiPickAction(attacker: SimPokemon, targets: SimPokemon[]): { moveIndex: number; targetIndex: number; useDynamax: boolean; useZMove: boolean } {
-  const shouldDynamax = !attacker.dynamaxUsed && !attacker.megaEvolved && Math.random() < 0.35;
+export function aiPickAction(
+  attacker: SimPokemon,
+  targets: SimPokemon[],
+  weather: WeatherName = "none",
+): { moveIndex: number; targetIndex: number; useDynamax: boolean; useZMove: boolean; useTera: boolean } {
   const available = attacker.moves.map((m, i) => ({ m, i })).filter(x => x.m.currentPp > 0);
   if (attacker.choiceLockedMove !== null) {
     const mv = attacker.moves[attacker.choiceLockedMove];
-    if (mv && mv.currentPp > 0) return { moveIndex: attacker.choiceLockedMove, targetIndex: 0, useDynamax: false, useZMove: false };
+    if (mv && mv.currentPp > 0) return { moveIndex: attacker.choiceLockedMove, targetIndex: 0, useDynamax: false, useZMove: false, useTera: false };
   }
-  if (!available.length) return { moveIndex: 0, targetIndex: 0, useDynamax: false, useZMove: false };
+  if (!available.length) return { moveIndex: 0, targetIndex: 0, useDynamax: false, useZMove: false, useTera: false };
 
-  if (Math.random() < 0.2) {
-    const mi = available[Math.floor(Math.random() * available.length)].i;
-    const zOk = !!(attacker.heldItem && Z_CRYSTAL_ITEMS[attacker.heldItem]?.type === attacker.moves[mi]?.type);
-    return { moveIndex: mi, targetIndex: 0, useDynamax: shouldDynamax, useZMove: zOk && Math.random() < 0.5 };
-  }
-
+  // Score each move against each target
   let best = { score: -1, mi: available[0].i, ti: 0 };
   for (const { m, i } of available) {
     for (let ti = 0; ti < targets.length; ti++) {
       if (targets[ti].currentHp <= 0) continue;
       const t = targets[ti];
-      let eff = m.power ? getSimEff(m.type, t.types) : 0.5;
+      let eff = m.power ? getSimEff(m.type, t.types) : 0.3;
       if (t.ability === "wonder-guard" && eff < 2) eff = 0;
       if (t.ability === "levitate" && m.type === "ground") eff = 0;
       if ((t.ability === "water-absorb" || t.ability === "dry-skin") && m.type === "water") eff = 0;
@@ -851,12 +880,38 @@ export function aiPickAction(attacker: SimPokemon, targets: SimPokemon[]): { mov
       if (t.ability === "sap-sipper" && m.type === "grass") eff = 0;
       if (t.heldItem === "air-balloon" && !t.airBalloonPopped && m.type === "ground") eff = 0;
       const stab = attacker.types.includes(m.type) ? 1.5 : 1;
-      const score = (m.power || 5) * eff * stab * (0.8 + Math.random() * 0.4);
+      // Weather bonus for AI awareness
+      let weatherMult = 1;
+      if (weather === "rain" && m.type === "water") weatherMult = 1.5;
+      if (weather === "rain" && m.type === "fire") weatherMult = 0.5;
+      if (weather === "sun" && m.type === "fire") weatherMult = 1.5;
+      if (weather === "sun" && m.type === "water") weatherMult = 0.5;
+      // Prefer finishing move if target is low HP
+      const hpFactor = t.currentHp < t.maxHp * 0.3 ? 1.5 : 1;
+      const score = (m.power || 5) * eff * stab * weatherMult * hpFactor * (0.85 + Math.random() * 0.3);
       if (score > best.score) best = { score, mi: i, ti };
     }
   }
-  const zOk = !!(attacker.heldItem && Z_CRYSTAL_ITEMS[attacker.heldItem]?.type === attacker.moves[best.mi]?.type);
-  return { moveIndex: best.mi, targetIndex: best.ti, useDynamax: shouldDynamax, useZMove: zOk && Math.random() < 0.6 };
+
+  // Use Z-Move when we have SE hit
+  const bestMove = attacker.moves[best.mi];
+  const bestTarget = targets[best.ti];
+  const zCrystalType = attacker.heldItem ? Z_CRYSTAL_ITEMS[attacker.heldItem]?.type : null;
+  const zOk = !!(zCrystalType && bestMove?.type === zCrystalType && bestMove.power);
+  const bestEff = bestMove && bestTarget ? getSimEff(bestMove.type, bestTarget.types) : 1;
+  const shouldUseZ = zOk && (bestEff >= 2 || Math.random() < 0.3);
+
+  // Use Dynamax when not yet used, at good HP, or opponent is nearly beaten
+  const shouldDynamax = !attacker.dynamaxUsed && !attacker.megaEvolved &&
+    (attacker.currentHp >= attacker.maxHp * 0.7 || (bestTarget && bestTarget.currentHp < bestTarget.maxHp * 0.5)) &&
+    Math.random() < 0.5;
+
+  // Use Tera when taking super effective hits or when it boosts STAB
+  const shouldTera = !attacker.teraActive &&
+    (bestEff >= 2 || !attacker.types.includes(attacker.teraType)) &&
+    Math.random() < 0.4;
+
+  return { moveIndex: best.mi, targetIndex: best.ti, useDynamax: shouldDynamax, useZMove: shouldUseZ, useTera: shouldTera };
 }
 
 // ─── Turn Processing ──────────────────────────────────────────────────────────
@@ -870,8 +925,13 @@ export function processTurn(state: BattleState, playerActions: PlayerAction[]): 
 
   let playerMegaUsed = state.playerMegaUsed;
   let opponentMegaUsed = state.opponentMegaUsed;
+  let playerTeraUsed = state.playerTeraUsed;
+  let opponentTeraUsed = state.opponentTeraUsed;
+  let weather = state.weather;
+  let weatherTurns = state.weatherTurns;
+  const setWeather = (w: WeatherName, turns: number) => { weather = w; weatherTurns = turns; };
 
-  type Act = { side: "p"|"o"; teamIdx: number; targetTeamIdx: number; moveIndex: number; priority: number; speed: number; useMega: boolean; useZMove: boolean; useDynamax: boolean; switchTo?: number };
+  type Act = { side: "p"|"o"; teamIdx: number; targetTeamIdx: number; moveIndex: number; priority: number; speed: number; useMega: boolean; useZMove: boolean; useDynamax: boolean; useTera: boolean; switchTo?: number };
   const allActs: Act[] = [];
 
   // Track active indices mutably so switch actions can update them before moves
@@ -883,7 +943,7 @@ export function processTurn(state: BattleState, playerActions: PlayerAction[]): 
     const pk = pt[ti]; if (!pk || pk.currentHp <= 0) continue;
     if (pa.switchTo !== undefined && pa.moveIndex < 0) {
       // Switch action: high priority, processes before moves
-      allActs.push({ side: "p", teamIdx: ti, targetTeamIdx: 0, moveIndex: -1, priority: 7, speed: 9999, useMega: false, useZMove: false, useDynamax: false, switchTo: pa.switchTo });
+      allActs.push({ side: "p", teamIdx: ti, targetTeamIdx: 0, moveIndex: -1, priority: 7, speed: 9999, useMega: false, useZMove: false, useDynamax: false, useTera: false, switchTo: pa.switchTo });
       continue;
     }
     const effectiveMoveIdx = pk.choiceLockedMove !== null ? pk.choiceLockedMove : pa.moveIndex;
@@ -892,21 +952,28 @@ export function processTurn(state: BattleState, playerActions: PlayerAction[]): 
     if (pk.status === "paralysis" && pk.ability !== "quick-feet") spd = Math.floor(spd * 0.5);
     if (pk.ability === "quick-feet" && pk.status !== "none") spd = Math.floor(spd * 1.5);
     if (pk.heldItem === "choice-scarf") spd = Math.floor(spd * 1.5);
-    allActs.push({ side: "p", teamIdx: ti, targetTeamIdx: state.opponentActive[pa.targetSlot] ?? state.opponentActive[0], moveIndex: effectiveMoveIdx, priority: mv?.priority ?? 0, speed: spd, useMega: !!pa.useMega && !playerMegaUsed, useZMove: !!pa.useZMove, useDynamax: !!pa.useDynamax && !pk.dynamaxUsed });
+    if (pk.ability === "swift-swim" && weather === "rain") spd = Math.floor(spd * 2);
+    if (pk.ability === "chlorophyll" && weather === "sun") spd = Math.floor(spd * 2);
+    if (pk.ability === "sand-rush" && weather === "sand") spd = Math.floor(spd * 2);
+    const useTera = !!pa.useTera && !playerTeraUsed;
+    allActs.push({ side: "p", teamIdx: ti, targetTeamIdx: state.opponentActive[pa.targetSlot] ?? state.opponentActive[0], moveIndex: effectiveMoveIdx, priority: mv?.priority ?? 0, speed: spd, useMega: !!pa.useMega && !playerMegaUsed, useZMove: !!pa.useZMove, useDynamax: !!pa.useDynamax && !pk.dynamaxUsed, useTera });
   }
 
   for (const aiIdx of state.opponentActive) {
     const pk = ot[aiIdx]; if (!pk || pk.currentHp <= 0) continue;
     const targets = state.playerActive.map(i => pt[i]).filter(t => t.currentHp > 0);
-    const { moveIndex, targetIndex, useDynamax, useZMove } = aiPickAction(pk, targets);
+    const { moveIndex, targetIndex, useDynamax, useZMove, useTera: aiTera } = aiPickAction(pk, targets, weather);
     const mv = pk.moves[moveIndex];
     let spd = withStage(pk.speed, pk.stages.speed);
     if (pk.status === "paralysis" && pk.ability !== "quick-feet") spd = Math.floor(spd * 0.5);
     if (pk.ability === "quick-feet" && pk.status !== "none") spd = Math.floor(spd * 1.5);
     if (pk.heldItem === "choice-scarf") spd = Math.floor(spd * 1.5);
-    // AI mega: use if opponent hasn't and holds a mega stone
+    if (pk.ability === "swift-swim" && weather === "rain") spd = Math.floor(spd * 2);
+    if (pk.ability === "chlorophyll" && weather === "sun") spd = Math.floor(spd * 2);
+    if (pk.ability === "sand-rush" && weather === "sand") spd = Math.floor(spd * 2);
     const aiMega = !opponentMegaUsed && !!(pk.heldItem && MEGA_STONE_ITEMS[pk.heldItem]);
-    allActs.push({ side: "o", teamIdx: aiIdx, targetTeamIdx: state.playerActive[targetIndex] ?? state.playerActive[0], moveIndex, priority: mv?.priority ?? 0, speed: spd, useMega: aiMega, useZMove, useDynamax: useDynamax && !pk.dynamaxUsed });
+    const aiTeraOk = aiTera && !opponentTeraUsed && !pk.teraActive;
+    allActs.push({ side: "o", teamIdx: aiIdx, targetTeamIdx: state.playerActive[targetIndex] ?? state.playerActive[0], moveIndex, priority: mv?.priority ?? 0, speed: spd, useMega: aiMega, useZMove, useDynamax: useDynamax && !pk.dynamaxUsed, useTera: aiTeraOk });
   }
 
   allActs.sort((a, b) => {
@@ -935,7 +1002,7 @@ export function processTurn(state: BattleState, playerActions: PlayerAction[]): 
       const slotIdx = activeArr.indexOf(act.teamIdx);
       if (slotIdx >= 0) activeArr[slotIdx] = act.switchTo;
       const oppActive = act.side === "p" ? newOpponentActive : newPlayerActive;
-      applyEntry(inPoke, act.side, pt, ot, [...activeArr], [...oppActive], add);
+      applyEntry(inPoke, act.side, pt, ot, [...activeArr], [...oppActive], add, setWeather);
       continue;
     }
 
@@ -961,6 +1028,20 @@ export function processTurn(state: BattleState, playerActions: PlayerAction[]): 
       attacker.dynamaxUsed = true;
       const isGMax = GMAX_POKEMON.has(attacker.slug);
       add(`🌟 ${attacker.nameTh || attacker.nameEn} ${isGMax ? "กิกะแมกซ์" : "ไดนาแมกซ์"}!`, "status");
+    }
+
+    // ── Terastallization ──
+    if (act.useTera && !attacker.teraActive) {
+      attacker.teraActive = true;
+      attacker.types = [attacker.teraType];
+      if (act.side === "p") playerTeraUsed = true; else opponentTeraUsed = true;
+      const TERA_ICONS: Partial<Record<string, string>> = {
+        fire: "🔥", water: "💧", grass: "🌿", electric: "⚡", ice: "❄️", fighting: "🥊",
+        poison: "☠️", ground: "🌍", flying: "🦅", psychic: "🔮", bug: "🐛", rock: "🪨",
+        ghost: "👻", dragon: "🐉", dark: "🌑", steel: "⚙️", fairy: "🌸", normal: "⭐",
+      };
+      const icon = TERA_ICONS[attacker.teraType] ?? "✨";
+      add(`${icon} ${attacker.nameTh || attacker.nameEn} เทราสตอลไลเซชัน! กลายเป็นธาตุ ${attacker.teraType.toUpperCase()}!`, "status");
     }
 
     const mv = attacker.moves[act.moveIndex];
@@ -1039,22 +1120,27 @@ export function processTurn(state: BattleState, playerActions: PlayerAction[]): 
       continue;
     }
 
-    const { damage, effectiveness, isCrit: _c, missed, messages, weaknessPolicyTriggered } = rollDamage(attacker, target, effectiveMove, { ignoreAcc: isZMove || isDynamaxed });
-    void _c;
+    const { damage, effectiveness, isCrit, missed, messages, weaknessPolicyTriggered } = rollDamage(attacker, target, effectiveMove, { ignoreAcc: isZMove || isDynamaxed, weather });
     for (const m of messages) add(m, "status");
-    if (missed) continue;
+    if (missed) { add(`${an} พลาด!`); continue; }
 
     // Parental Bond: second hit
     const secondHit = attacker.ability === "parental-bond" && damage > 0 && !isZMove && !isDynamaxed;
 
     if (damage > 0) {
+      const hpPct = Math.round((damage / target.maxHp) * 100);
       target.currentHp = Math.max(0, target.currentHp - damage);
-      add(`${tn} รับ ${damage} แดมเมจ (HP ${target.currentHp}/${target.maxHp})`, "damage");
+      const critMark = isCrit ? " 💥 คริติคอล!" : "";
+      add(`${tn} รับ ${damage} แดมเมจ (${hpPct}% HP)${critMark} [${target.currentHp}/${target.maxHp} HP]`, isCrit ? "status" : "damage");
     }
 
     if (secondHit && target.currentHp > 0) {
-      const { damage: d2 } = rollDamage(attacker, target, { ...effectiveMove, power: Math.floor(effectiveMove.power * 0.25) });
-      if (d2 > 0) { target.currentHp = Math.max(0, target.currentHp - d2); add(`${an} โจมตีครั้งที่สอง! ${tn} รับ ${d2} (HP ${target.currentHp}/${target.maxHp})`, "damage"); }
+      const { damage: d2 } = rollDamage(attacker, target, { ...effectiveMove, power: Math.floor(effectiveMove.power * 0.25) }, { weather });
+      if (d2 > 0) {
+        const p2 = Math.round((d2 / target.maxHp) * 100);
+        target.currentHp = Math.max(0, target.currentHp - d2);
+        add(`${an} โจมตีครั้งที่สอง! ${tn} รับ ${d2} (${p2}%) [${target.currentHp}/${target.maxHp} HP]`, "damage");
+      }
     }
 
     if (attacker.heldItem === "choice-band" || attacker.heldItem === "choice-specs" || attacker.heldItem === "choice-scarf") {
@@ -1094,6 +1180,64 @@ export function processTurn(state: BattleState, playerActions: PlayerAction[]): 
       add(`${an} รับดาเมจสะท้อน ${r}!`, "damage"); if (attacker.currentHp <= 0) add(`${an} หมดแรง!`, "faint");
     }
     if (target.currentHp <= 0) add(`${tn} หมดแรง!`, "faint");
+  }
+
+  // ── End-of-turn: Weather countdown + damage ──
+  if (weather !== "none") {
+    weatherTurns--;
+    const WEATHER_ICONS: Record<WeatherName, string> = { none: "", rain: "🌧️", sun: "☀️", sand: "🌪️", hail: "🌨️" };
+    const WEATHER_NAMES: Record<WeatherName, string> = { none: "", rain: "ฝน", sun: "แดดจัด", sand: "พายุทราย", hail: "พายุหิมะ" };
+    if (weatherTurns <= 0) {
+      add(`${WEATHER_ICONS[weather]} ${WEATHER_NAMES[weather]}สงบลงแล้ว`, "info");
+      weather = "none";
+    } else {
+      add(`${WEATHER_ICONS[weather]} ${WEATHER_NAMES[weather]}ยังคงพัดต่อ... (${weatherTurns} เทิร์น)`, "info");
+    }
+    if (weather === "sand" || weather === "hail") {
+      for (const p of [...pt, ...ot]) {
+        if (p.currentHp <= 0) continue;
+        const immune = weather === "sand"
+          ? (p.types.includes("rock") || p.types.includes("steel") || p.types.includes("ground") || p.ability === "sand-veil" || p.ability === "sand-rush" || p.ability === "sand-force" || p.ability === "magic-guard")
+          : (p.types.includes("ice") || p.ability === "ice-body" || p.ability === "snow-cloak" || p.ability === "magic-guard" || p.ability === "overcoat");
+        if (!immune) {
+          const d = Math.max(1, Math.floor(p.maxHp / 16));
+          p.currentHp = Math.max(0, p.currentHp - d);
+          const n = p.nameTh || p.nameEn;
+          add(`${WEATHER_ICONS[weather]} ${n} รับ ${d} แดมเมจจาก${WEATHER_NAMES[weather]}!`, "status");
+          if (p.currentHp <= 0) add(`${n} หมดแรง!`, "faint");
+        }
+      }
+    }
+    if (weather === "sun") {
+      for (const p of [...pt, ...ot]) {
+        if (p.currentHp <= 0) continue;
+        if (p.ability === "solar-power") {
+          const d = Math.max(1, Math.floor(p.maxHp / 8));
+          p.currentHp = Math.max(0, p.currentHp - d);
+          const n = p.nameTh || p.nameEn;
+          add(`☀️ Solar Power ดูด HP ${n} ${d}!`, "status");
+          if (p.currentHp <= 0) add(`${n} หมดแรง!`, "faint");
+        }
+        if (p.ability === "dry-skin") {
+          const d = Math.max(1, Math.floor(p.maxHp / 8));
+          p.currentHp = Math.max(0, p.currentHp - d);
+          const n = p.nameTh || p.nameEn;
+          add(`☀️ Dry Skin ดูด HP ${n} ${d}!`, "status");
+          if (p.currentHp <= 0) add(`${n} หมดแรง!`, "faint");
+        }
+      }
+    }
+    if (weather === "rain") {
+      for (const p of [...pt, ...ot]) {
+        if (p.currentHp <= 0) continue;
+        if (p.ability === "rain-dish" || p.ability === "dry-skin") {
+          const h = Math.max(1, Math.floor(p.maxHp / 16));
+          p.currentHp = Math.min(p.maxHp, p.currentHp + h);
+          const n = p.nameTh || p.nameEn;
+          add(`🌧️ ${p.ability === "dry-skin" ? "Dry Skin" : "Rain Dish"} ฟื้น ${n} ${h} HP!`, "heal");
+        }
+      }
+    }
   }
 
   // ── End-of-turn: Dynamax countdown ──
@@ -1197,7 +1341,7 @@ export function processTurn(state: BattleState, playerActions: PlayerAction[]): 
       const next = team.findIndex((p, i) => p.currentHp > 0 && !active.includes(i));
       if (next >= 0) {
         add(`${team[next].nameTh || team[next].nameEn} ออกมาต่อสู้!`);
-        applyEntry(team[next], side, pt, ot, side === "p" ? [next] : active, side === "p" ? otherActive : [next], add);
+        applyEntry(team[next], side, pt, ot, side === "p" ? [next] : active, side === "p" ? otherActive : [next], add, setWeather);
         return next;
       }
       return ai;
@@ -1214,6 +1358,6 @@ export function processTurn(state: BattleState, playerActions: PlayerAction[]): 
 
   return {
     log,
-    state: { ...state, playerTeam: pt, opponentTeam: ot, playerActive: newPlayerActive, opponentActive: newOpponentActive, turn: state.turn + 1, logSeed: lid, winner, playerMegaUsed, opponentMegaUsed },
+    state: { ...state, playerTeam: pt, opponentTeam: ot, playerActive: newPlayerActive, opponentActive: newOpponentActive, turn: state.turn + 1, logSeed: lid, winner, playerMegaUsed, opponentMegaUsed, playerTeraUsed, opponentTeraUsed, weather, weatherTurns },
   };
 }

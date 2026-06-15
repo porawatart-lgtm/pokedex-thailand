@@ -227,8 +227,10 @@ interface EvolutionChainNode {
 export function flattenEvolutionChain(
   node: EvolutionChainNode,
   fromId?: number,
+  fromSlug?: string,
   result: Array<{
     fromId: number;
+    fromSlug: string;
     toId: number;
     toSlug: string;
     details: EvolutionChainNode["evolution_details"][0] | null;
@@ -236,9 +238,10 @@ export function flattenEvolutionChain(
 ) {
   const speciesId = parseInt(node.species.url.split("/").filter(Boolean).pop() ?? "0");
 
-  if (fromId !== undefined) {
+  if (fromId !== undefined && fromSlug !== undefined) {
     result.push({
       fromId,
+      fromSlug,
       toId: speciesId,
       toSlug: node.species.name,
       details: node.evolution_details[0] ?? null,
@@ -246,7 +249,7 @@ export function flattenEvolutionChain(
   }
 
   for (const next of node.evolves_to) {
-    flattenEvolutionChain(next, speciesId, result);
+    flattenEvolutionChain(next, speciesId, node.species.name, result);
   }
 
   return result;

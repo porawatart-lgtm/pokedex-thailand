@@ -105,11 +105,17 @@ async function getPokemonDetail(id: string): Promise<PokemonDetail | null> {
       cries: { latest: pokemon.cries.latest, legacy: pokemon.cries.legacy },
       eggGroups: species.egg_groups.map((eg) => eg.name),
       evolutions: evolutions.map((ev) => ({
-        fromId: ev.fromId, toId: ev.toId, toSlug: ev.toSlug,
+        fromId: ev.fromId, fromSlug: ev.fromSlug,
+        toId: ev.toId, toSlug: ev.toSlug,
         toName: ev.toSlug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
+        fromName: ev.fromSlug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
         toNameTh: null, toSprite: null, trigger: ev.details?.trigger.name ?? "level-up",
         minLevel: ev.details?.min_level ?? null,
         itemName: ev.details?.item?.name ?? ev.details?.held_item?.name ?? null,
+        heldItemName: ev.details?.held_item?.name ?? null,
+        knownMove: ev.details?.known_move?.name ?? null,
+        minHappiness: ev.details?.min_happiness ?? null,
+        location: ev.details?.location?.name ?? null,
         condition: ev.details?.time_of_day || null,
       })),
       locations: [], forms: [], flavorTexts,
@@ -472,45 +478,88 @@ export default async function PokemonDetailPage({
             </SectionCard>
 
             {/* Evolution Chain */}
-            {pokemon.evolutions.length > 0 && (
-              <SectionCard title="สายวิวัฒนาการ">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {pokemon.evolutions.map((ev, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className="text-center">
-                        <Link
-                          href={`/pokedex/${ev.toSlug}`}
-                          className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-secondary transition-colors"
-                        >
-                          <Image
-                            src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${ev.toId || ev.fromId}.png`}
-                            alt={ev.toName}
-                            width={64}
-                            height={64}
-                            className="object-contain"
-                          />
-                          <span className="text-xs font-medium">{ev.toNameTh ?? ev.toName}</span>
-                        </Link>
+            {pokemon.evolutions.length > 0 && (() => {
+              const evs = pokemon.evolutions;
+              // Find base form (fromId not appearing as any toId)
+              const toIds = new Set(evs.map(e => e.toId));
+              const baseEv = evs.find(e => !toIds.has(e.fromId));
+              const baseId = baseEv?.fromId;
+              const baseSlug = baseEv?.fromSlug;
+              const baseName = baseEv?.fromName ?? "";
+              // Group evolutions by fromId for branching
+              const groups: Record<number, typeof evs> = {};
+              for (const e of evs) {
+                if (!groups[e.fromId]) groups[e.fromId] = [];
+                groups[e.fromId].push(e);
+              }
+              // Build ordered stages: base → stage1 → stage2
+              const stages: (typeof evs)[] = [];
+              let currentIds = baseId ? [baseId] : [];
+              while (currentIds.length > 0) {
+                const nexts = currentIds.flatMap(id => groups[id] ?? []);
+                if (!nexts.length) break;
+                stages.push(nexts);
+                currentIds = nexts.map(e => e.toId);
+              }
+
+              function evoConditionTh(ev: typeof evs[0]): string {
+                if (ev.trigger === "trade") {
+                  if (ev.heldItemName) return `ค้าขายพร้อม ${ev.heldItemName.replace(/-/g, " ")}`;
+                  return "ค้าขาย";
+                }
+                if (ev.minLevel) {
+                  const parts = [`เลเวล ${ev.minLevel}`];
+                  if (ev.condition === "day") parts.push("(กลางวัน)");
+                  else if (ev.condition === "night") parts.push("(กลางคืน)");
+                  if (ev.location) parts.push(`ที่ ${ev.location.replace(/-/g, " ")}`);
+                  return parts.join(" ");
+                }
+                if (ev.itemName) return `ใช้ ${ev.itemName.replace(/-/g, " ")}`;
+                if (ev.minHappiness) return `ความสุข ≥${ev.minHappiness}${ev.condition === "day" ? " (กลางวัน)" : ev.condition === "night" ? " (กลางคืน)" : ""}`;
+                if (ev.knownMove) return `รู้จักท่า ${ev.knownMove.replace(/-/g, " ")}`;
+                if (ev.location) return `ที่ ${ev.location.replace(/-/g, " ")}`;
+                if (ev.condition === "day") return "เลเวลอัพ (กลางวัน)";
+                if (ev.condition === "night") return "เลเวลอัพ (กลางคืน)";
+                return "เลเวลอัพ";
+              }
+
+              function PokemonNode({ id, slug, name }: { id: number; slug: string; name: string }) {
+                const isCurrent = slug === pokemon!.slug;
+                return (
+                  <Link href={`/pokedex/${slug}`}
+                    className={cn("flex flex-col items-center gap-1 p-2 rounded-xl transition-colors", isCurrent ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-secondary")}>
+                    <Image src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`}
+                      alt={name} width={64} height={64} className="object-contain" />
+                    <span className={cn("text-xs font-medium text-center leading-tight", isCurrent && "text-primary")}>{name}</span>
+                  </Link>
+                );
+              }
+
+              return (
+                <SectionCard title="สายวิวัฒนาการ">
+                  <div className="flex items-center gap-1 flex-wrap justify-center">
+                    {baseId && baseSlug && (
+                      <PokemonNode id={baseId} slug={baseSlug} name={baseName} />
+                    )}
+                    {stages.map((group, si) => (
+                      <div key={si} className="flex items-center gap-1">
+                        <div className="flex flex-col items-center gap-2">
+                          {group.map((ev, ei) => (
+                            <div key={ei} className="flex items-center gap-1">
+                              <div className="flex flex-col items-center text-center px-1">
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-[9px] text-muted-foreground max-w-[80px] leading-tight">{evoConditionTh(ev)}</span>
+                              </div>
+                              <PokemonNode id={ev.toId} slug={ev.toSlug} name={ev.toNameTh ?? ev.toName} />
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      {i < pokemon.evolutions.length - 1 && (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-2 space-y-1">
-                  {pokemon.evolutions.map((ev, i) => (
-                    <div key={i} className="text-xs text-muted-foreground">
-                      → {ev.toName}:{" "}
-                      {ev.minLevel ? `Level ${ev.minLevel}` : ""}
-                      {ev.itemName ? `ใช้ ${ev.itemName}` : ""}
-                      {ev.trigger === "trade" ? "Trade" : ""}
-                      {ev.condition ? ` (${ev.condition})` : ""}
-                    </div>
-                  ))}
-                </div>
-              </SectionCard>
-            )}
+                    ))}
+                  </div>
+                </SectionCard>
+              );
+            })()}
 
             {/* Special Forms */}
             {pokemon.forms.length > 0 && (

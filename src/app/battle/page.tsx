@@ -8,8 +8,9 @@ import type { PokemonTypeName } from "@/types/pokemon";
 import {
   buildSimPokemon, processTurn, getSimEff, simCalcHp, simCalcStat,
   applyTeamEntryEffects, BATTLE_ABILITIES, HELD_ITEMS, BERRIES, MEGA_STONE_ITEMS, Z_CRYSTAL_ITEMS,
-  type SimMove, type SimPokemon, type BattleMode, type BattleState, type BattleLogEntry, type PlayerAction,
+  type SimMove, type SimPokemon, type BattleMode, type BattleState, type BattleLogEntry, type PlayerAction, type WeatherName,
 } from "@/lib/battle-sim";
+import { ALL_TYPES } from "@/lib/type-chart";
 
 // ─── PokeAPI helpers ──────────────────────────────────────────────────────────
 
@@ -552,6 +553,7 @@ function BattleCard({ pokemon, side, isActive }: { pokemon: SimPokemon; side: "p
           {pokemon.currentHp <= 0 && <div className="absolute inset-0 flex items-center justify-center"><Skull className="h-6 w-6 text-red-500/70" /></div>}
           {isDynamax && <div className="absolute -top-1 -right-1 text-[10px]">🌟</div>}
           {isMega && !isDynamax && <div className="absolute -top-1 -right-1 text-[10px]">🔮</div>}
+          {pokemon.teraActive && !isDynamax && !isMega && <div className="absolute -top-1 -right-1 text-[10px]">✨</div>}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-1 flex-wrap">
@@ -560,6 +562,7 @@ function BattleCard({ pokemon, side, isActive }: { pokemon: SimPokemon; side: "p
             {pokemon.choiceLockedMove !== null && <span className="text-[8px] bg-yellow-900/60 text-yellow-300 px-1 rounded">ล็อค</span>}
             {isMega && <span className="text-[8px] bg-purple-900/60 text-purple-300 px-1 rounded font-bold">MEGA</span>}
             {isDynamax && <span className="text-[8px] bg-red-900/60 text-red-300 px-1 rounded font-bold">DMX {pokemon.dynamaxTurnsLeft}</span>}
+            {pokemon.teraActive && <span className="text-[8px] bg-cyan-900/60 text-cyan-300 px-1 rounded font-bold">TERA {pokemon.teraType.toUpperCase()}</span>}
             {pokemon.flashFireActive && <span className="text-[8px]">🔥</span>}
           </div>
           <div className="flex gap-1 mb-1.5">{pokemon.types.map(t => <TypeTag key={t} type={t} />)}</div>
@@ -625,10 +628,12 @@ export default function BattlePage() {
   const [pendingActions, setPendingActions] = useState<PlayerAction[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Mega / Z / Dynamax toggle state for current action
+  // Mega / Z / Dynamax / Tera toggle state for current action
   const [pendingMega, setPendingMega] = useState(false);
   const [pendingZMove, setPendingZMove] = useState(false);
   const [pendingDynamax, setPendingDynamax] = useState(false);
+  const [pendingTera, setPendingTera] = useState(false);
+  const [showTeamImport, setShowTeamImport] = useState(false);
   // Switch panel state
   const [switchingSlot, setSwitchingSlot] = useState<number | null>(null);
   // Forced switch after faint state
@@ -646,6 +651,24 @@ export default function BattlePage() {
   const handleSetPokemon = (side: "player" | "opponent", idx: number, p: PokeData) => {
     const firstAbility = p.abilities.find(a => !a.isHidden)?.slug ?? p.abilities[0]?.slug ?? "";
     setSlot(side, idx, { pokemon: p, moves: [], availableMoves: [], loadingMoves: false, selectedAbility: firstAbility, selectedItem: null });
+  };
+
+  // ── Team Builder import ───────────────────────────────────────────────────
+
+  interface SavedTeam { id: string; name: string; format: string; slots: ({ id: number; slug: string; nameEn: string; nameTh?: string | null; types: PokemonTypeName[] } | null)[] }
+
+  const loadSavedTeams = (): SavedTeam[] => {
+    try { return JSON.parse(localStorage.getItem("pokedex-th-teams") ?? "[]"); } catch { return []; }
+  };
+
+  const importTeamFromBuilder = async (team: SavedTeam) => {
+    setShowTeamImport(false);
+    for (let i = 0; i < Math.min(team.slots.length, 4); i++) {
+      const member = team.slots[i];
+      if (!member) continue;
+      const p = await fetchPokeData(member.slug);
+      if (p) handleSetPokemon("player", i, p);
+    }
   };
 
   const openMovePicker = async (side: "player" | "opponent", idx: number) => {
@@ -727,6 +750,8 @@ export default function BattlePage() {
       mode, playerTeam, opponentTeam, playerActive, opponentActive,
       turn: 1, logSeed: 1, winner: null,
       playerMegaUsed: false, opponentMegaUsed: false,
+      playerTeraUsed: false, opponentTeraUsed: false,
+      weather: "none", weatherTurns: 0,
     };
     const { state, log } = applyTeamEntryEffects(initialState);
     setBattle(state);
@@ -747,8 +772,8 @@ export default function BattlePage() {
   const handlePickMove = (moveIdx: number) => {
     if (!battle || isProcessing) return;
     if (mode === "single") {
-      executeTurn([{ activeSlot: 0, moveIndex: moveIdx, targetSlot: 0, useMega: pendingMega, useZMove: pendingZMove, useDynamax: pendingDynamax }]);
-      setPendingMega(false); setPendingZMove(false); setPendingDynamax(false);
+      executeTurn([{ activeSlot: 0, moveIndex: moveIdx, targetSlot: 0, useMega: pendingMega, useZMove: pendingZMove, useDynamax: pendingDynamax, useTera: pendingTera }]);
+      setPendingMega(false); setPendingZMove(false); setPendingDynamax(false); setPendingTera(false);
     } else {
       setPendingMoveIdx(moveIdx);
     }
@@ -756,7 +781,7 @@ export default function BattlePage() {
 
   const handlePickTarget = (targetSlot: number) => {
     if (!battle || isProcessing || pendingMoveIdx === null) return;
-    const action: PlayerAction = { activeSlot: inputSlot, moveIndex: pendingMoveIdx, targetSlot, useMega: pendingMega, useZMove: pendingZMove, useDynamax: pendingDynamax };
+    const action: PlayerAction = { activeSlot: inputSlot, moveIndex: pendingMoveIdx, targetSlot, useMega: pendingMega, useZMove: pendingZMove, useDynamax: pendingDynamax, useTera: pendingTera };
     const newPending = [...pendingActions, action];
     setPendingMoveIdx(null);
     setPendingMega(false); setPendingZMove(false); setPendingDynamax(false);
@@ -905,7 +930,12 @@ export default function BattlePage() {
 
           <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <h2 className="text-sm font-bold mb-3 text-blue-400">🛡️ ทีมของคุณ</h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-bold text-blue-400">🛡️ ทีมของคุณ</h2>
+                <button type="button" onClick={() => setShowTeamImport(true)} className="text-xs px-3 py-1 rounded-lg border border-blue-600/40 text-blue-400 hover:border-blue-400 transition-colors flex items-center gap-1">
+                  📂 นำเข้าทีม
+                </button>
+              </div>
               <div className="space-y-3">
                 {Array.from({ length: teamSize }).map((_, i) => (
                   <PokemonSlot key={i} slot={playerSlots[i]} label={`ช่อง ${i + 1}`}
@@ -964,6 +994,22 @@ export default function BattlePage() {
                 ))}
               </div>
             </div>
+            {/* Weather indicator */}
+            {battle.weather !== "none" && (() => {
+              const WEATHER_INFO: Record<WeatherName, { icon: string; name: string; color: string }> = {
+                none: { icon: "", name: "", color: "" },
+                rain: { icon: "🌧️", name: "ฝนตก", color: "text-blue-300 bg-blue-900/30 border-blue-700/40" },
+                sun: { icon: "☀️", name: "แดดจัด", color: "text-yellow-300 bg-yellow-900/30 border-yellow-700/40" },
+                sand: { icon: "🌪️", name: "พายุทราย", color: "text-amber-300 bg-amber-900/30 border-amber-700/40" },
+                hail: { icon: "🌨️", name: "พายุหิมะ", color: "text-cyan-300 bg-cyan-900/30 border-cyan-700/40" },
+              };
+              const w = WEATHER_INFO[battle.weather];
+              return (
+                <div className={cn("flex items-center justify-center gap-2 py-1 px-3 rounded-full border text-xs font-semibold mx-auto w-fit", w.color)}>
+                  {w.icon} {w.name} เหลือ {battle.weatherTurns} เทิร์น
+                </div>
+              );
+            })()}
             <div className="border-t border-border/30 my-2" />
             <div className="space-y-2">
               <p className="text-[10px] font-semibold text-blue-400/70 uppercase tracking-wider">ทีมของคุณ</p>
@@ -1076,7 +1122,7 @@ export default function BattlePage() {
 
                   {pendingMoveIdx === null && (
                     <div className="space-y-2">
-                      {/* Mega / Dynamax / Z-Move toggles */}
+                      {/* Mega / Dynamax / Z-Move / Tera toggles */}
                       <div className="flex gap-2 flex-wrap">
                         {canMegaEvolve(currentPlayerPokemon) && (
                           <button type="button" onClick={() => { setPendingMega(!pendingMega); setPendingDynamax(false); }}
@@ -1089,6 +1135,17 @@ export default function BattlePage() {
                             className={cn("text-xs px-3 py-1 rounded-full border transition-colors font-semibold", pendingDynamax ? "border-red-400 bg-red-900/50 text-red-200" : "border-red-600/50 text-red-400 hover:border-red-400")}>
                             🌟 Dynamax{pendingDynamax ? " ✓" : ""}
                           </button>
+                        )}
+                        {!battle?.playerTeraUsed && !currentPlayerPokemon.teraActive && (
+                          <button type="button" onClick={() => setPendingTera(!pendingTera)}
+                            className={cn("text-xs px-3 py-1 rounded-full border transition-colors font-semibold", pendingTera ? "border-cyan-400 bg-cyan-900/50 text-cyan-200" : "border-cyan-600/50 text-cyan-400 hover:border-cyan-400")}>
+                            ✨ เทรา ({currentPlayerPokemon.teraType.toUpperCase()}){pendingTera ? " ✓" : ""}
+                          </button>
+                        )}
+                        {currentPlayerPokemon.teraActive && (
+                          <span className="text-xs px-3 py-1 rounded-full border border-cyan-400 bg-cyan-900/40 text-cyan-300 font-semibold">
+                            ✨ เทรา {currentPlayerPokemon.teraType.toUpperCase()} กำลังใช้งาน
+                          </span>
                         )}
                         {zMoveType && (
                           <button type="button" onClick={() => setPendingZMove(!pendingZMove)}
@@ -1188,6 +1245,46 @@ export default function BattlePage() {
           onAddMove={mv => addMoveToAvailable(movePicker.side, movePicker.idx, mv)}
         />
       )}
+
+      {/* Team Builder Import Modal */}
+      {showTeamImport && (() => {
+        const saved = loadSavedTeams();
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setShowTeamImport(false)}>
+            <div className="bg-card border border-border rounded-2xl p-5 max-w-sm w-full mx-4 max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-base">📂 นำเข้าทีมจาก Team Builder</h3>
+                <button type="button" aria-label="ปิด" onClick={() => setShowTeamImport(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+              </div>
+              {saved.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  <p>ยังไม่มีทีมที่บันทึกไว้</p>
+                  <p className="text-xs mt-1">ไปที่ Team Builder เพื่อสร้างและบันทึกทีม</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {saved.map(team => (
+                    <button key={team.id} type="button" onClick={() => importTeamFromBuilder(team)}
+                      className="w-full text-left p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                      <div className="font-semibold text-sm">{team.name}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {team.slots.filter(Boolean).length} โปเกมอน
+                        {team.format && ` · ${team.format}`}
+                      </div>
+                      <div className="flex gap-1 mt-2 flex-wrap">
+                        {team.slots.filter(Boolean).map((p, i) => p && (
+                          <img key={i} src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`}
+                            alt={p.nameEn} width={32} height={32} style={{ imageRendering: "pixelated" }} />
+                        ))}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
