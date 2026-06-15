@@ -85,6 +85,7 @@ async function fetchMoveDetail(slug: string): Promise<SimMove | null> {
       drain: Math.max(0, d.meta?.drain ?? 0),
       recoil: (d.meta?.recoil ?? 0) < 0 ? Math.abs(d.meta.recoil) : 0,
       target: d.target?.name ?? "selected-pokemon",
+      statChanges: (d.stat_changes ?? []).map((sc: { change: number; stat: { name: string } }) => ({ stat: sc.stat.name, change: sc.change })),
     };
   } catch { return null; }
 }
@@ -123,7 +124,7 @@ async function autoPickMoves(poke: PokeData): Promise<SimMove[]> {
   const status = valid.filter(m => m.power === 0);
   const picked = [...damaging.slice(0, 4), ...status.slice(0, Math.max(0, 4 - Math.min(4, damaging.length)))].slice(0, 4);
   if (picked.length === 0) {
-    return [{ slug: "struggle", nameEn: "Struggle", nameTh: "สตรักเกิล", type: "normal", category: "physical", power: 50, accuracy: 0, pp: 1, priority: 0, ailment: "none", ailmentChance: 0, drain: 0, recoil: 25, target: "selected-pokemon" }];
+    return [{ slug: "struggle", nameEn: "Struggle", nameTh: "สตรักเกิล", type: "normal", category: "physical", power: 50, accuracy: 0, pp: 1, priority: 0, ailment: "none", ailmentChance: 0, drain: 0, recoil: 25, target: "selected-pokemon", statChanges: [] }];
   }
   return picked;
 }
@@ -580,7 +581,11 @@ function BattleCard({ pokemon, side, isActive }: { pokemon: SimPokemon; side: "p
       <div className="flex items-start gap-3">
         <div className="relative">
           <img src={spriteUrl} alt={pokemon.nameEn}
-            onError={e => { (e.target as HTMLImageElement).src = pokemon.spriteUrl; }}
+            onError={e => {
+              const img = e.target as HTMLImageElement;
+              const fallback = side === "player" ? pokemon.baseBackSpriteUrl : pokemon.baseSpriteUrl;
+              if (img.src !== fallback) img.src = fallback;
+            }}
             width={side === "player" ? 80 : 72} height={side === "player" ? 80 : 72}
             className={cn("object-contain", pokemon.currentHp <= 0 && "opacity-30 grayscale", isDynamax && "scale-110")}
             style={{ imageRendering: "pixelated" }} />

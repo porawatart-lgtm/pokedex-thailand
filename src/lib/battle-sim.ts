@@ -460,6 +460,7 @@ export interface SimMove {
   power: number; accuracy: number; pp: number; priority: number;
   ailment: string; ailmentChance: number; drain: number; recoil: number;
   target: string;
+  statChanges: { stat: string; change: number }[];
 }
 
 export interface SimPokemon {
@@ -467,6 +468,7 @@ export interface SimPokemon {
   types: PokemonTypeName[]; level: number;
   maxHp: number; currentHp: number;
   atk: number; def: number; spAtk: number; spDef: number; speed: number;
+  baseSpriteUrl: string; baseBackSpriteUrl: string;
   stages: { atk: number; def: number; spAtk: number; spDef: number; speed: number; acc: number; eva: number };
   status: BattleStatus; statusTurns: number;
   moves: (SimMove & { currentPp: number })[];
@@ -556,6 +558,8 @@ export function buildSimPokemon(p: {
     moves: p.moves.map(m => ({ ...m, currentPp: m.pp })),
     spriteUrl: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`,
     backSpriteUrl: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/${p.id}.png`,
+    baseSpriteUrl: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`,
+    baseBackSpriteUrl: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/${p.id}.png`,
     ability: p.ability ?? "", heldItem: p.heldItem ?? null,
     choiceLockedMove: null, flashFireActive: false, sashUsed: false,
     weaknessPolicyUsed: false, airBalloonPopped: false,
@@ -914,6 +918,37 @@ export function aiPickAction(
   return { moveIndex: best.mi, targetIndex: best.ti, useDynamax: shouldDynamax, useZMove: shouldUseZ, useTera: shouldTera };
 }
 
+// ─── Stat Change Helper ───────────────────────────────────────────────────────
+
+const STAT_STAGE_MAP: Record<string, keyof SimPokemon["stages"]> = {
+  "attack": "atk", "defense": "def", "special-attack": "spAtk",
+  "special-defense": "spDef", "speed": "speed", "accuracy": "acc", "evasion": "eva",
+};
+const STAT_DISPLAY: Record<string, string> = {
+  "atk": "Atk", "def": "Def", "spAtk": "SpAtk", "spDef": "SpDef",
+  "speed": "Speed", "acc": "ความแม่นยำ", "eva": "การหลบ",
+};
+
+function applyStatChanges(
+  target: SimPokemon, changes: { stat: string; change: number }[],
+  name: string, add: (t: string, k?: BattleLogEntry["kind"]) => void,
+) {
+  for (const sc of changes) {
+    const key = STAT_STAGE_MAP[sc.stat];
+    if (!key) continue;
+    const actual = target.ability === "contrary" ? -sc.change : sc.change;
+    const prev = target.stages[key];
+    target.stages[key] = Math.max(-6, Math.min(6, prev + actual)) as number;
+    const next = target.stages[key];
+    if (next !== prev) {
+      const arrow = actual >= 2 ? "⬆⬆ เพิ่มมาก!" : actual === 1 ? "⬆ เพิ่ม!" : actual <= -2 ? "⬇⬇ ลดมาก!" : "⬇ ลด!";
+      add(`${name} ${STAT_DISPLAY[key]} ${arrow} (${next > 0 ? "+" : ""}${next})`, "status");
+    } else {
+      add(`${name} ${STAT_DISPLAY[key] ?? sc.stat} ไม่สามารถ${actual > 0 ? "เพิ่ม" : "ลด"}ได้อีก!`);
+    }
+  }
+}
+
 // ─── Turn Processing ──────────────────────────────────────────────────────────
 
 export function processTurn(state: BattleState, playerActions: PlayerAction[]): TurnResult {
@@ -1100,20 +1135,51 @@ export function processTurn(state: BattleState, playerActions: PlayerAction[]): 
     const displayName = effectiveMove.nameTh && effectiveMove.nameTh !== effectiveMove.nameEn ? effectiveMove.nameTh : effectiveMove.nameEn;
     add(`${an} ใช้ ${displayName}!`);
 
-    // Magic Bounce: reflect status moves
+    // Status moves — determine real target (self vs opponent)
     if (effectiveMove.category === "status") {
-      if (!isZMove && target.ability === "magic-bounce") {
-        add(`🪞 Magic Bounce ของ ${tn} สะท้อน ${displayName}!`, "status");
-        // Apply status to attacker instead
-        const s = STATUS_MAP[effectiveMove.ailment];
-        if (s && canApplyStatus(attacker, s)) { attacker.status = s; if (s === "sleep") attacker.statusTurns = Math.floor(Math.random() * 3) + 2; add(`${an}${STATUS_NAMES[s]}!`, "status"); }
-      } else {
-        const s = STATUS_MAP[effectiveMove.ailment];
-        if (s && canApplyStatus(target, s)) {
+      const SELF_TARGETS = new Set(["user", "users-field", "user-and-allies", "entire-field"]);
+      const isSelf = SELF_TARGETS.has(effectiveMove.target);
+      // For self-targeting moves, the actual target is the attacker
+      const moveTarget = isSelf ? attacker : target;
+      const moveTn = isSelf ? an : tn;
+
+      let didSomething = false;
+
+      // Apply stat changes
+      if (effectiveMove.statChanges.length > 0) {
+        // Magic Bounce reflects stat-lowering moves aimed at opponent
+        if (!isSelf && !isZMove && moveTarget.ability === "magic-bounce" && effectiveMove.statChanges.some(sc => sc.change < 0)) {
+          add(`🪞 Magic Bounce ของ ${moveTn} สะท้อน ${displayName}!`, "status");
+          applyStatChanges(attacker, effectiveMove.statChanges, an, add);
+        } else {
+          applyStatChanges(moveTarget, effectiveMove.statChanges, moveTn, add);
+        }
+        didSomething = true;
+      }
+
+      // Apply ailment
+      const s = STATUS_MAP[effectiveMove.ailment];
+      if (s) {
+        if (isSelf) {
+          if (canApplyStatus(attacker, s)) {
+            attacker.status = s;
+            if (s === "sleep") attacker.statusTurns = Math.floor(Math.random() * 3) + 2;
+            add(`${an}${STATUS_NAMES[s]}!`, "status");
+            didSomething = true;
+          }
+        } else if (!isZMove && target.ability === "magic-bounce") {
+          add(`🪞 Magic Bounce ของ ${tn} สะท้อน ${displayName}!`, "status");
+          if (canApplyStatus(attacker, s)) { attacker.status = s; if (s === "sleep") attacker.statusTurns = Math.floor(Math.random() * 3) + 2; add(`${an}${STATUS_NAMES[s]}!`, "status"); }
+          didSomething = true;
+        } else if (canApplyStatus(target, s)) {
           target.status = s; if (s === "sleep") target.statusTurns = Math.floor(Math.random() * 3) + 2;
           add(`${tn}${STATUS_NAMES[s]}!`, "status");
-        } else { add("ไม่มีผล!"); }
+          didSomething = true;
+        }
       }
+
+      if (!didSomething) add(`${an} ใช้ ${displayName} — ไม่มีผล!`);
+
       if (attacker.heldItem === "choice-band" || attacker.heldItem === "choice-specs" || attacker.heldItem === "choice-scarf") {
         if (attacker.choiceLockedMove === null) attacker.choiceLockedMove = act.moveIndex;
       }
